@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # 1. AIRFLOW
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/airflow.Dockerfile
+    container_name: uas_airflow
+    environment:
+      # SequentialExecutor
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _AIRFLOW_DB_UPGRADE=true
+      - AIRFLOW__WEBSERVER__SECRET_KEY=ini_rahasia_uas
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./data:/opt/airflow/data
+      - ./src:/opt/airflow/src
+    ports:
+      - "8080:8080"
+    command: airflow standalone
+
+  # 2. STREAMLIT (Untuk Tampilan Web / Frontend)
+  streamlit:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    container_name: uas_frontend
+    volumes:
+      - ./streamlit_app:/app/streamlit_app # Kodingan UI masuk sini
+      - ./data:/app/data # Baca data dari Lake
+      - ./src:/app/src # Baca logika model
+    ports:
+      - "8501:8501"
+    command: streamlit run streamlit_app/main.py --server.address=0.0.0.0
