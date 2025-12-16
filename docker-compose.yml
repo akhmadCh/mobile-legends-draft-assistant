@@ -14,6 +14,16 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - _AIRFLOW_DB_UPGRADE=true
       - AIRFLOW__WEBSERVER__SECRET_KEY=ini_rahasia_uas
+
+      # credentials
+      - AIRFLOW__WEBSERVER__RBAC=True
+      - _AIRFLOW_WWW_USER_CREATE=True
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin123
+      - _AIRFLOW_WWW_USER_FIRSTNAME=UAS
+      - _AIRFLOW_WWW_USER_LASTNAME=Airflow
+      - _AIRFLOW_WWW_USER_ROLE=Admin
+      - _AIRFLOW_WWW_USER_EMAIL=uas@example.com
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
