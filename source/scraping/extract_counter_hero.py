@@ -86,7 +86,7 @@ if all_counter_data:
     df = pd.DataFrame(all_counter_data)
     
     # output_filename = 'data_counter_mlbb_final.csv'
-    output_filename = os.path.join(BASE_DIR, "data", "raw", "data_counter_mlbb_final.csv")
+    output_filename = os.path.join(BASE_DIR, "data", "raw", "data_counter_mlbb.csv")
     df.to_csv(output_filename, index=False)
     
     print("\n" + "="*50)
