@@ -46,3 +46,17 @@ services:
     ports:
       - "8501:8501"
     command: streamlit run streamlit_app/main.py --server.address=0.0.0.0
+
+  # 3. MINIO (OBJECT STORAGE - Untuk Gambar Hero)
+  minio:
+    image: minio/minio:latest
+    container_name: uas_minio
+    ports:
+      - "9000:9000" # Port API (Untuk script Python)
+      - "9001:9001" # Port Console (Untuk buka di Browser)
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./minio_data:/data # Agar data gambar tidak hilang saat container mati
