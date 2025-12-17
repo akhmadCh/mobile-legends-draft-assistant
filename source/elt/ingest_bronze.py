@@ -5,14 +5,14 @@ import glob
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# folder asal (Raw)
+# folder asal (raw)
 RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
 DB_PATH = os.path.join(RAW_DIR, "database", "statistik_hero_master.db")
 
-# folder tujuan (Bronze)
+# folder tujuan (bronze)
 BRONZE_DIR = os.path.join(BASE_DIR, "data", "bronze")
 
-# Pastikan folder Bronze ada, jika tidak, buat folder baru
+# Pastikan folder bronze ada, jika tidak, buat folder baru
 os.makedirs(BRONZE_DIR, exist_ok=True)
 
 def ingest_hero_stats_sql():
