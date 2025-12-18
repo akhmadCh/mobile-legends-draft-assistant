@@ -1,9 +1,7 @@
-# Gunakan 'bookworm' agar stabil dan paket linux lengkap
 FROM python:3.10-slim-bookworm
 
 WORKDIR /app
 
-# (Sisa kode ke bawah tetap sama)
 RUN apt-get update && apt-get install -y \
    build-essential \
    curl \
@@ -11,7 +9,9 @@ RUN apt-get update && apt-get install -y \
    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip3 install -r requirements.txt
+
+RUN pip3 install --upgrade pip && \
+   pip3 install --default-timeout=1000 --no-cache-dir -r requirements.txt
 
 EXPOSE 8501
 
