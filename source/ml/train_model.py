@@ -1,55 +1,59 @@
 import pandas as pd
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+import pickle
 import json
 import os
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import BernoulliNB
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-# Setup Path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "silver", "training_data.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 def train():
-    print("🤖 Memulai Training Model...")
+    print("🤖 Training Model Final (BernoulliNB - Full Features)...")
     
-    # 1. Cek Data
     if not os.path.exists(DATA_PATH):
-        print(f"❌ Error: File data tidak ditemukan di {DATA_PATH}")
+        print("❌ Data tidak ditemukan.")
         return
 
     df = pd.read_parquet(DATA_PATH)
-    print(f"   Data dimuat: {len(df)} baris.")
-
-    # 2. Siapkan Fitur (X) dan Target (y)
+    
+    # 1. Gunakan SEMUA fitur Hero (Tanpa membuang yang jarang muncul)
     feature_cols = [c for c in df.columns if c.startswith('T1_') or c.startswith('T2_')]
     X = df[feature_cols]
     y = df['Label_Winner']
+    
+    print(f"   📊 Total Data: {len(df)} match")
+    print(f"   📊 Total Fitur: {len(feature_cols)} hero")
 
-    # 3. Split Data
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # 4. Train XGBoost
-    # Perbaikan: Menghapus 'use_label_encoder' yang sudah deprecated
-    model = xgb.XGBClassifier(
-        objective='binary:logistic',
-        n_estimators=100,
-        learning_rate=0.1,
-        max_depth=5,
-        eval_metric='logloss'
+    # 2. Split Data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
     )
+
+    # 3. Train BernoulliNB
+    # alpha=1.0 adalah standar smoothing agar tidak terlalu overfitting
+    model = BernoulliNB(alpha=1.0) 
     model.fit(X_train, y_train)
 
-    # 5. Evaluasi
+    # 4. Evaluasi
     preds = model.predict(X_test)
     acc = accuracy_score(y_test, preds)
-    print(f"✅ Training Selesai! Akurasi: {acc:.2%}")
-
-    # 6. Simpan Model & Feature Names
-    # PERBAIKAN UTAMA: Menggunakan .get_booster() agar kompatibel dengan XGBoost v3
-    model.get_booster().save_model(os.path.join(MODEL_DIR, "draft_model.json"))
     
+    print(f"\n✅ Akurasi Test Set: {acc:.2%}")
+    print("\nLaporan Klasifikasi:")
+    print(classification_report(y_test, preds))
+    
+    print("Matriks Kebingungan:")
+    print(confusion_matrix(y_test, preds))
+
+    # 5. Simpan Model & Fitur
+    with open(os.path.join(MODEL_DIR, "draft_model_nb.pkl"), "wb") as f:
+        pickle.dump(model, f)
+    
+    # Simpan semua kolom fitur agar predictor tidak error
     with open(os.path.join(MODEL_DIR, "feature_names.json"), "w") as f:
         json.dump(feature_cols, f)
         
