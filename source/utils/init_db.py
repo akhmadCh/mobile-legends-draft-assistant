@@ -1,36 +1,45 @@
 import pandas as pd
 import sqlite3
 import os
+import random
+from source.utils.minio_helper import read_df_from_minio
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-CSV_PATH = os.path.join(BASE_DIR, "data", "raw", "data_statistik_hero.csv")
-DB_FOLDER = os.path.join(BASE_DIR, "data", "raw", "database")
-DB_PATH = f'{DB_FOLDER}/statistik_hero_master.db'
 
-def init_database():
-   # cek apakah file csv ada
-   if not os.path.exists(CSV_PATH):
-      print(f"Error: File {CSV_PATH} tidak ditemukan")
-      return
+# minio path
+MINIO_PATH = "raw/temp/hero_master/statistik_hero_raw.csv"
+
+# Nama Database yang akan tercipta
+DB_FOLDER = os.path.join(BASE_DIR, "data", "raw", "database")
+DB_NAME = f'{DB_FOLDER}/mlbb_internal_sql.db'
+
+def create_mock_sql():
+   print("Database SQL Dummy")
    
-   # baca csv
-   print("Membaca file scraping CSV 'statistik hero'")
-   df = pd.read_csv(CSV_PATH)
-   
-   # buat folder database jika belum ada
-   os.makedirs(DB_FOLDER, exist_ok=True)
-   
-   # buat koneksi ke SQLite agar membuat file .db otomatis
-   conn = sqlite3.connect(DB_PATH)
-   
-   # masukkan csv ke dalam tabel SQL
-   df.to_sql('statistik_hero_master', conn, if_exists='replace', index=False)
-   
-   # tutup koneksi
-   conn.close()
-   print(f"SUKSES! Database SQL berhasil dibuat di: {DB_PATH}")
-   print("Sekarang sistem kita punya 'Sumber Data SQL' yang valid untuk UAS.")
+   try:
+      # Baca hasil scraping dari raw/temp
+      # df = pd.read_csv(MINIO_PATH)
+      df = read_df_from_minio("mlbb-lakehouse", MINIO_PATH)
+      
+      # filter kolom
+      target_columns = ['Nama Hero', 'Win Rate', 'Pick Rate', 'Ban Rate', 'Speciality']
+      df_sql = df[target_columns].copy()
+      
+      df_sql.columns = ['hero_name', 'win_rate', 'pick_rate', 'ban_rate', 'speciality']
+
+      # --- SIMPAN KE SQLITE ---
+      conn = sqlite3.connect(DB_NAME)
+      
+      # simpan ke tabel
+      df_sql.to_sql('hero_statistics', conn, if_exists='replace', index=False)
+      conn.close()
+      
+      print(f"✅ Database SQL Siap: {DB_NAME}")
+      print(f"   Tabel 'hero_statistics' berisi {len(df_sql)} baris.")
+      
+   except FileNotFoundError:
+      print("❌ File 'statistik_hero_raw.csv' di MINIO tidak ditemukan. Jalankan scraping dulu!")
 
 if __name__ == "__main__":
-   init_database()
+   create_mock_sql()

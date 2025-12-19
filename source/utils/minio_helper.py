@@ -4,7 +4,7 @@ import pandas as pd
 import os 
 
 MINIO_CONFIG = {
-   'endpoint' : 'minio:9000',
+   'endpoint' : 'localhost:9000',
    'access_key' : 'minioadmin',
    'secret_key' : 'minioadmin',
    'secure' : False
@@ -13,7 +13,7 @@ MINIO_CONFIG = {
 def get_minio_client():
    return Minio(**MINIO_CONFIG)
 
-def upload_file_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, file_format='csv'):
+def upload_df_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, file_format='csv'):
    """
    upload dataframe pandas langsung ke MinIO sebagai file CSV.
    """
@@ -28,6 +28,9 @@ def upload_file_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, f
    if file_format == 'csv':
       df.to_csv(data_stream, index=False)
       content_type = 'text/csv'
+   elif file_format == 'sql':
+      df.to_sql(object_name, data_stream, index=False)
+      content_type = 'application/octet-stream'
    elif file_format == 'parquet':
       df.to_parquet(data_stream, index=False)
       content_type = 'application/octet-stream'
@@ -46,3 +49,19 @@ def upload_file_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, f
       print(f"[MINIO] Berhasil Upload: {bucket_name}/{object_name}")
    except Exception as e:
       print(f"[MINIO] Error Upload: {object_name}: {e}")
+
+def read_df_from_minio(bucket_name: str, object_name: str, file_format='csv'):
+   client = get_minio_client()
+   
+   try:
+      response = client.get_object(bucket_name, object_name)
+      
+      if file_format == 'csv':
+         df = pd.read_csv(response)
+      elif file_format == 'parquet':
+         df = pd.read_parquet(response)
+      
+      return df
+   except Exception as e:
+      print(f"[MINIO] Error Read: {object_name}: {e}")
+      return None
