@@ -8,7 +8,7 @@ TARGET_URL = "https://mlbb.io/hero-tier"
 MINIO_PATH = "raw/hero_meta/meta_tier_raw.csv"
 
 def scrape_meta_tier():
-   print("Scraping Meta & Tier (Playwright Interceptor)...")
+   print("--- START SCRAPING 'Meta' (playwright interceptor) ---")
    
    meta_data_list = []
    
@@ -17,14 +17,14 @@ def scrape_meta_tier():
       page = browser.new_page()
 
       def handle_response(response):
-         # Target API spesifik yang kita temukan tadi
+         # target API
          if "api/hero/hero-tiers" in response.url and response.status == 200:
-            print("🎯 API Meta-Tier Terdeteksi!")
+            print("\n--Start to scrape API 'Meta'")
             try:
                json_data = response.json()
                if 'data' in json_data:
                   items = json_data['data']
-                  print(f"📦 Mengambil payload: {len(items)} hero.")
+                  print(f"--Consume payload: {len(items)} hero.")
                   
                   for item in items:
                      # Susun Dictionary sesuai struktur JSON yang ditemukan
@@ -33,33 +33,32 @@ def scrape_meta_tier():
                         'Nama Hero': item.get('hero_name'),
                         'Tier': item.get('tier'),
                         'Previous Tier': item.get('previous_tier'),
-                        'Score': item.get('score'), # Bagus untuk ranking numerik
-                        'Image URL': item.get('img_src') # Aset berharga untuk Dashboard
+                        'Score': item.get('score'), # ranking numerik
+                        'Image URL': item.get('img_src') # asset untuk dashboard
                      })
             except Exception as e:
-               print(f"⚠️ Gagal parsing JSON: {e}")
+               print(f"--Failed to consume and parsing JSON: {e}")
 
       page.on("response", handle_response)
 
-      print(f"🚀 Membuka {TARGET_URL}...")
+      print(f"--\n Open the Target URL {TARGET_URL}")
       try:
          page.goto(TARGET_URL, wait_until="networkidle", timeout=60000)
-         time.sleep(5) # Waktu napas tambahan
+         time.sleep(5)
       except Exception as e:
-         print(f"⚠️ Page load warning: {e}")
+         print(f"--Warning for Page Load: {e}")
       
       browser.close()
 
-   # Simpan ke MinIO
    if meta_data_list:
       df = pd.DataFrame(meta_data_list)
       print("\n--- Preview Data Meta ---")
       print(df[['Nama Hero', 'Tier', 'Score']].head(3).to_string(index=False))
       
       upload_df_to_minio(df, "mlbb-lakehouse", MINIO_PATH)
-      print(f"\n✅ [SUKSES] {len(df)} data Meta Tier tersimpan.")
+      print(f"\n--SUCCESS, {len(df)} data save to MinIO in '{MINIO_PATH}'")
    else:
-      print("\n❌ [GAGAL] Tidak ada data Meta yang tertangkap.")
+      print("--FAILED, no data found.")
 
 if __name__ == "__main__":
    scrape_meta_tier()
