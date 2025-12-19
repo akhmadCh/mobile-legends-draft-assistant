@@ -28,7 +28,7 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./data:/opt/airflow/data
-      - ./src:/opt/airflow/src
+      - ./source:/opt/airflow/source
     ports:
       - "8080:8080"
     command: airflow standalone
@@ -42,7 +42,8 @@ services:
     volumes:
       - ./streamlit_app:/app/streamlit_app # Kodingan UI masuk sini
       - ./data:/app/data # Baca data dari Lake
-      - ./src:/app/src # Baca logika model
+      - ./source:/app/source # Baca logika model
+      - ./models:/app/models
     ports:
       - "8501:8501"
     command: streamlit run streamlit_app/main.py --server.address=0.0.0.0
