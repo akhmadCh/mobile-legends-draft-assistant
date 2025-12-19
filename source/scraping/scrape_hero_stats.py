@@ -7,13 +7,9 @@ import os
 # URL Frontend (Kita buka ini, lalu cegat API di belakang layar)
 TARGET_URL = "https://mlbb.io/hero-statistics"
 # Lokasi simpan di MinIO
-MINIO_PATH = "raw/hero_master/statistik_hero_raw.csv"
+MINIO_PATH = "raw/temp/hero_master/statistik_hero_raw.csv"
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# folder asal (raw)
-DATA_DIR = os.path.join(BASE_DIR, "data")
-TEMP_PATH = os.path.join(DATA_DIR, "temp", "temp_hero_data_for_setup.csv")
 
 def scrape_hero_stats():
    print("Scraping Hero Statistics (Playwright Interceptor)...")
@@ -87,9 +83,6 @@ def scrape_hero_stats():
    # 5. Simpan ke MinIO
    if hero_stats_list:
       df = pd.DataFrame(hero_stats_list)
-      
-      df.to_csv(TEMP_PATH, index=False)
-      print(f"Data disimpan ke lokal : {TEMP_PATH} (Setup SQL)")
       
       print("\n--- Preview Data Statistik ---")
       # Tampilkan kolom utama untuk verifikasi

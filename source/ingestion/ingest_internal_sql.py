@@ -18,11 +18,11 @@ def ingest_sql_data():
       conn = sqlite3.connect(DB_SOURCE)
       
       # Query data dari tabel yang kita buat tadi
-      query = "SELECT * FROM master_hero_price"
+      query = "SELECT * FROM hero_statistics"
       df = pd.read_sql(query, conn)
       conn.close()
       
-      print(f"📦 Berhasil load {len(df)} row dari SQL.")
+      print(f"Berhasil load {len(df)} row dari SQL.")
       
       # Upload ke MinIO
       upload_df_to_minio(df, "mlbb-lakehouse", MINIO_DEST)
