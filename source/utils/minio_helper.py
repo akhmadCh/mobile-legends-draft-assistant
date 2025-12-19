@@ -28,6 +28,9 @@ def upload_df_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, fil
    if file_format == 'csv':
       df.to_csv(data_stream, index=False)
       content_type = 'text/csv'
+   elif file_format == 'sql':
+      df.to_sql(object_name, data_stream, index=False)
+      content_type = 'application/octet-stream'
    elif file_format == 'parquet':
       df.to_parquet(data_stream, index=False)
       content_type = 'application/octet-stream'
