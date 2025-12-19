@@ -4,7 +4,7 @@ import pandas as pd
 import os 
 
 MINIO_CONFIG = {
-   'endpoint' : 'minio:9000',
+   'endpoint' : 'localhost:9000',
    'access_key' : 'minioadmin',
    'secret_key' : 'minioadmin',
    'secure' : False
@@ -13,7 +13,7 @@ MINIO_CONFIG = {
 def get_minio_client():
    return Minio(**MINIO_CONFIG)
 
-def upload_file_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, file_format='csv'):
+def upload_df_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, file_format='csv'):
    """
    upload dataframe pandas langsung ke MinIO sebagai file CSV.
    """
