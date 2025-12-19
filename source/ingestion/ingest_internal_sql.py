@@ -9,7 +9,8 @@ CSV_PATH = os.path.join(BASE_DIR, "data", "raw", "data_statistik_hero.csv")
 DB_FOLDER = os.path.join(BASE_DIR, "data", "raw", "database")
 
 DB_SOURCE = f'{DB_FOLDER}/mlbb_internal_sql.db'
-MINIO_DEST = "raw/internal_db/hero_master_sql.csv"
+# MINIO_DEST = "raw/internal_db/hero_master_sql.csv"
+MINIO_DEST = "raw/internal_db/hero_master.sql"
 
 def ingest_sql_data():
    print("🔌 Extracting from SQL Source...")
