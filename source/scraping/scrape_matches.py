@@ -12,7 +12,8 @@ from source.utils.minio_helper import upload_df_to_minio
 # URL Target
 URLS = {
    "ID": "https://liquipedia.net/mobilelegends/MPL/Indonesia/Season_16/Regular_Season",
-   "PH": "https://liquipedia.net/mobilelegends/MPL/Philippines/Season_16/Regular_Season"
+   "PH": "https://liquipedia.net/mobilelegends/MPL/Philippines/Season_16/Regular_Season",
+   # "MY": "https://liquipedia.net/mobilelegends/MPL/Malaysia/Season_16/Regular_Season",
 }
 
 def setup_driver():

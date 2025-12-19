@@ -46,3 +46,19 @@ def upload_df_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, fil
       print(f"[MINIO] Berhasil Upload: {bucket_name}/{object_name}")
    except Exception as e:
       print(f"[MINIO] Error Upload: {object_name}: {e}")
+
+def read_df_from_minio(bucket_name: str, object_name: str, file_format='csv'):
+   client = get_minio_client()
+   
+   try:
+      response = client.get_object(bucket_name, object_name)
+      
+      if file_format == 'csv':
+         df = pd.read_csv(response)
+      elif file_format == 'parquet':
+         df = pd.read_parquet(response)
+      
+      return df
+   except Exception as e:
+      print(f"[MINIO] Error Read: {object_name}: {e}")
+      return None
