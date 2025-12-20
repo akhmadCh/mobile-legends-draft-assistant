@@ -4,7 +4,7 @@ import pandas as pd
 import os 
 
 MINIO_CONFIG = {
-   'endpoint' : 'minio:9000',
+   'endpoint' : 'localhost:9000',
    'access_key' : 'minioadmin',
    'secret_key' : 'minioadmin',
    'secure' : False
@@ -13,7 +13,7 @@ MINIO_CONFIG = {
 def get_minio_client():
    return Minio(**MINIO_CONFIG)
 
-def upload_file_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, file_format='csv'):
+def upload_df_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, file_format='csv'):
    """
    upload dataframe pandas langsung ke MinIO sebagai file CSV.
    """
@@ -23,13 +23,26 @@ def upload_file_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, f
    if not client.bucket_exists(bucket_name):
       client.make_bucket(bucket_name)
    
-   # convert df sebagai csv ke buffer memory
-   data_stream = io.BytesIO()
    if file_format == 'csv':
-      df.to_csv(data_stream, index=False)
-      content_type = 'text/csv'
+      # convert df sebagai csv ke buffer memory
+      csv_bytes = df.to_csv(index=False).encode('utf-8')
+      data_stream = io.BytesIO(csv_bytes)
+      content_type = 'application/csv'
+      length = len(csv_bytes)
+   elif file_format == 'sql':
+      # convert df sebagai csv ke buffer memory
+      data_stream = io.BytesIO()
+      
+      df.to_sql(object_name, data_stream, index=False)
+      content_type = 'application/octet-stream'
    elif file_format == 'parquet':
-      df.to_parquet(data_stream, index=False)
+      # convert df sebagai csv ke buffer memory
+      data_stream = io.BytesIO()
+      
+      # parquet butuh engine pyarrow atau fastparquet
+      parquet_bytes = df.to_parquet(index=False) 
+      data_stream = io.BytesIO(parquet_bytes)
+      length = data_stream.getbuffer().nbytes
       content_type = 'application/octet-stream'
    
    # Reset pointer stream ke awal
@@ -40,9 +53,27 @@ def upload_file_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, f
          bucket_name,
          object_name,
          data_stream,
-         length=data_stream.getbuffer().nbytes,
+         length,
          content_type=content_type
       )
       print(f"[MINIO] Berhasil Upload: {bucket_name}/{object_name}")
    except Exception as e:
       print(f"[MINIO] Error Upload: {object_name}: {e}")
+
+def read_df_from_minio(bucket_name: str, object_name: str, file_format='csv'):
+   client = get_minio_client()
+   
+   try:
+      response = client.get_object(bucket_name, object_name)
+      
+      if file_format == 'csv':
+         df = pd.read_csv(response)
+      elif file_format == 'parquet':
+         # agar bisa di-seek oleh engine parquet
+         data_buffer = io.BytesIO(response.read())
+         df = pd.read_parquet(data_buffer)
+      
+      return df
+   except Exception as e:
+      print(f"[MINIO] Error Read: {object_name}: {e}")
+      return None
