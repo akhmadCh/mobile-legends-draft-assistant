@@ -1,4 +1,20 @@
 import numpy as np
+import re
+
+def normalize_name_strict(text):
+   """
+   Normalisasi super ketat:
+   1. Lowercase
+   2. Hapus Spasi, Titik, Strip, Koma
+   3. Hapus angka tahun (2024)
+   Contoh: "Yi Sun-shin" -> "yisunshin", "Yi Sun Shin" -> "yisunshin"
+   """
+   if not isinstance(text, str): return ""
+   clean = text.lower()
+   # Hapus semua yg bukan huruf/angka
+   clean = re.sub(r'[^a-z0-9]', '', clean)
+
+   return clean
 
 def calculate_avg_counter_score(hero_name, enemy_team_list, counter_dict):
    """
