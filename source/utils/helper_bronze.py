@@ -5,7 +5,6 @@ def get_timestamp():
    """return waktu saat ini untuk metadata"""
    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-
 def normalize_hero_name(name: str) -> str:
    """
    Membersihkan nama hero.
@@ -24,6 +23,9 @@ def normalize_hero_name(name: str) -> str:
 
 def clean_percentage(value):
    """ubah '50%' (str) jadi 50.0 (float)"""
+   if isinstance(value, str):
+      return float(value.replace('%', '').strip())
+   return value
 
 def parse_hero_list(hero_str: str):
    if not isinstance(hero_str, str):

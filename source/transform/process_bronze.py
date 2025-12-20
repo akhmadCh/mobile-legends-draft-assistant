@@ -5,13 +5,12 @@ from datetime import datetime
 import sys
 import os
 
-# helper functions
-from source.utils.helper_bronze import get_timestamp, normalize_hero_name, clean_percentage, get_tier_score, parse_string_to_list
-
 # Menambahkan root project ke path agar bisa import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
+# helper functions
 from source.utils.minio_helper import read_df_from_minio, upload_df_to_minio
+from source.utils.helper_bronze import get_timestamp, normalize_hero_name, clean_percentage, get_tier_score, parse_hero_list
 
 # --- KONFIGURASI BUCKET ---
 BUCKET_NAME = "mlbb-lakehouse"
@@ -115,9 +114,9 @@ def process_mpl_matches():
         df_ph['tournament'] = 'MPL PH S16'
         df_ph['source_file'] = 'mpl_ph_s16.csv'
         
-        df_ph['region'] = 'MY'
-        df_ph['tournament'] = 'MPL MY S16'
-        df_ph['source_file'] = 'mpl_my_s16.csv'
+        df_my['region'] = 'MY'
+        df_my['tournament'] = 'MPL MY S16'
+        df_my['source_file'] = 'mpl_my_s16.csv'
         
         # union
         df_combined = pd.concat([df_id, df_ph, df_my], ignore_index=True)
@@ -134,7 +133,7 @@ def process_mpl_matches():
                 # 1. raw columns
                 # parsing string "HeroA, HeroB" -> ["HeroA", "HeroB"]
                 col_raw_name = f"{col}_raw"
-                df_combined[col_raw_name] = df_combined[col].apply(parse_string_to_list)
+                df_combined[col_raw_name] = df_combined[col].apply(parse_hero_list)
                 
                 # 2. normalized columns
                 # ["Claude 2024", "Hylos"] -> ["claude", "hylos"]
