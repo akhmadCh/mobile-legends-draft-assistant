@@ -120,7 +120,7 @@ def transform_enrich_draft(df_draft, df_stats, df_meta, df_scores):
    # left join ke data Draft yg ada di MPL (fokus data di MPL)
    df_enriched = pd.merge(
       df_draft,
-      df_stats[['hero_name_normalized', 'win_rate', 'pick_rate', 'ban_rate', 'speciality']],
+      df_stats[['hero_name_normalized', 'win_rate', 'pick_rate', 'ban_rate', 'role', 'lane', 'speciality']],
       how='left',
       on='hero_name_normalized',
    )
@@ -148,6 +148,8 @@ def transform_enrich_draft(df_draft, df_stats, df_meta, df_scores):
       'pick_rate': 0.0,
       'tier_score': 0, 
       'counter_score': 0.0,
+      'role': 'Unknown',
+      'lane': 'Unknown',
       'speciality': 'Unknown'
    }
    df_final = df_enriched.fillna(value=fill_values)
