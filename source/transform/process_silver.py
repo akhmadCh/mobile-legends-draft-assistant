@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 # helper functions
 from source.utils.minio_helper import read_df_from_minio, upload_df_to_minio
 from source.utils.global_helper import get_timestamp
-from source.utils.helper_silver import calculate_avg_counter_score
+from source.utils.helper_silver import calculate_avg_counter_score, normalize_name_strict
 
 # --- KONFIGURASI BUCKET ---
 BUCKET_NAME = "mlbb-lakehouse"
@@ -84,7 +84,10 @@ def transform_calculate_scores(df_matches, df_counter):
    counter_dict = {}
    if df_counter is not None:
       for hero, counter, score in zip(df_counter['hero_name_normalized'], df_counter['counter_name_normalized'], df_counter['score']):
-         counter_dict[(hero, counter)] = score
+         k_hero = normalize_name_strict(hero)    # Anda membersihkan nama
+         k_counter = normalize_name_strict(counter)
+         
+         counter_dict[(k_hero, k_counter)] = score
          
    match_counter_scores = []
    
@@ -97,16 +100,30 @@ def transform_calculate_scores(df_matches, df_counter):
       # validasi tipe data list
       if not isinstance(left_heroes, (list, np.ndarray)): left_heroes = []
       if not isinstance(right_heroes, (list, np.ndarray)): right_heroes = []
+      
+      left_heroes_norm = [normalize_name_strict(h) for h in left_heroes]
+      right_heroes_norm = [normalize_name_strict(h) for h in right_heroes]
 
       # skor tim kiri (vs Kanan)
-      for hero in left_heroes:
-         score = calculate_avg_counter_score(hero, right_heroes, counter_dict)
-         match_counter_scores.append({'match_id': match_id, 'team_side': 'left', 'hero_name_normalized': hero, 'counter_score': score})
+      for hero_raw, hero_clean in zip(left_heroes, left_heroes_norm):
+         score = calculate_avg_counter_score(hero_clean, right_heroes_norm, counter_dict)
+         
+         match_counter_scores.append({
+            'match_id': match_id, 
+            'team_side': 'left', 
+            'hero_name_normalized': hero_raw, 
+            'counter_score': score
+         })
          
       # skor tim kanan (vs Kiri)
-      for hero in right_heroes:
-         score = calculate_avg_counter_score(hero, left_heroes, counter_dict)
-         match_counter_scores.append({'match_id': match_id, 'team_side': 'right', 'hero_name_normalized': hero, 'counter_score': score})
+      for hero_raw, hero_clean in zip(right_heroes, right_heroes_norm):
+         score = calculate_avg_counter_score(hero_clean, left_heroes_norm, counter_dict)
+         match_counter_scores.append({
+            'match_id': match_id, 
+            'team_side': 'right', 
+            'hero_name_normalized': hero_raw, 
+            'counter_score': score
+         })
 
    return pd.DataFrame(match_counter_scores)
 
