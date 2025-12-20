@@ -13,7 +13,7 @@ DB_SOURCE = f'{DB_FOLDER}/mlbb_internal_sql.db'
 MINIO_DEST = "raw/internal_db/hero_master.sql"
 
 def ingest_sql_data():
-   print("🔌 Extracting from SQL Source...")
+   print("---Extracting from SQL Source---")
    
    try:
       conn = sqlite3.connect(DB_SOURCE)
@@ -23,14 +23,14 @@ def ingest_sql_data():
       df = pd.read_sql(query, conn)
       conn.close()
       
-      print(f"Berhasil load {len(df)} row dari SQL.")
+      print(f"--Berhasil load {len(df)} row dari SQL.")
       
       # Upload ke MinIO
       upload_df_to_minio(df, "mlbb-lakehouse", MINIO_DEST)
-      print("✅ Sukses upload ke MinIO.")
+      print("--DONE: Sukses upload ke MinIO.")
       
    except Exception as e:
-      print(f"❌ Error SQL Ingestion: {e}")
+      print(f"--ERROR: Gagal melakukan SQL Ingestion: {e}")
 
 if __name__ == "__main__":
    ingest_sql_data()

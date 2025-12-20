@@ -76,20 +76,24 @@ def run_gold_pipeline():
     print('--- PIPELINE TRANSFORMING GOLD LAYER ---')
     
     # 1. Load Silver Data
-    df_silver = read_df_from_minio(BUCKET_NAME, "silver/silver_draft_enriched.parquet")
+    df_silver = read_df_from_minio(BUCKET_NAME, "silver/silver_draft_enriched.parquet", file_format='parquet')
     if df_silver is None:
         print("Silver data not found!")
         return
 
     # 2. Create ML Training Data
     df_ml = create_ml_features(df_silver)
-    upload_df_to_minio(df_ml, BUCKET_NAME, "gold/features_draft_model.parquet")
-    print(f"DONE: ML Features saved ({len(df_ml)} matches)")
+    upload_df_to_minio(df_ml, BUCKET_NAME, "gold/features_draft_model.parquet", file_format='parquet')
+    print(f"--DONE: ML Features saved ({len(df_ml)} matches)")
+    
+    read_df_from_minio(BUCKET_NAME, "gold/features_draft_model.parquet", file_format='parquet')
 
     # 3. Create Dashboard Data
     df_dashboard = create_hero_leaderboard(df_silver)
-    upload_df_to_minio(df_dashboard, BUCKET_NAME, "gold/hero_leaderboard.parquet")
-    print(f"DONE: Leaderboard saved ({len(df_dashboard)} heroes)")
+    upload_df_to_minio(df_dashboard, BUCKET_NAME, "gold/hero_leaderboard.parquet", file_format='parquet')
+    print(f"--DONE: Leaderboard saved ({len(df_dashboard)} heroes)")
+
+    read_df_from_minio(BUCKET_NAME, "gold/hero_leaderbord.parquet", file_format='parquet')
 
 if __name__ == "__main__":
     run_gold_pipeline()
