@@ -10,7 +10,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 
 # helper functions
 from source.utils.minio_helper import read_df_from_minio, upload_df_to_minio
-from source.utils.helper_bronze import get_timestamp, normalize_hero_name, clean_percentage, get_tier_score, parse_hero_list
+from source.utils.global_helper import get_timestamp
+from source.utils.helper_bronze import normalize_hero_name, clean_percentage, get_tier_score, parse_hero_list
 
 # --- KONFIGURASI BUCKET ---
 BUCKET_NAME = "mlbb-lakehouse"
