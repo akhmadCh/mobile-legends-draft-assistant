@@ -23,20 +23,23 @@ with DAG(
    tags=['uas', 'mobile_legends'],
 ) as dag:
 
-   # Task 1: Ingest Data (Raw -> Bronze)
-   # Kita menggunakan BashOperator untuk memanggil script python yang sudah kita buat
+   # Task 1: Ingest (Raw -> Bronze)
    task_ingest = BashOperator(
       task_id='ingest_to_bronze',
-      bash_command='python /opt/airflow/src/etl/ingest.py', 
-      # Path /opt/airflow adalah path di dalam Docker Container
+      bash_command='python /opt/airflow/source/elt/ingest_bronze.py', 
    )
 
-   # Task 2: Transform Data (Bronze -> Silver)
-   # Nanti kita buat script transform.py, sekarang dummy dulu
-   task_transform = BashOperator(
+   # Task 2: Transform (Bronze -> Silver)
+   task_transform_silver = BashOperator(
       task_id='transform_to_silver',
-      bash_command='echo "Transform script will run here later"',
+      bash_command='python /opt/airflow/source/transform/process_silver.py',
+   )
+   
+   # Task 3: Transform (Silver -> Gold)
+   task_transform_gold = BashOperator(
+      task_id='transform_to_gold',
+      bash_command='python /opt/airflow/source/transform/process_gold.py',
    )
 
-   # Menentukan Urutan Task (Ingest DULUAN, baru Transform)
-   task_ingest >> task_transform
+   # Urutan Eksekusi
+   task_ingest >> task_transform_silver >> task_transform_gold
