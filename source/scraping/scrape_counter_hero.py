@@ -24,52 +24,79 @@ def scrape_counters():
    all_counter_data = []
    print("--- START SCRAPING 'Counter and Tier' (API) ---")
 
-   # range id = hero ML saat ini yaitu 130
-   for target_id in range(1, 131): 
+   # 1. Buat daftar antrean ID yang akan di-scrape
+   ids_to_scrape = list(range(1, 131)) 
+   
+   # 2. Dictionary untuk melacak berapa kali ID gagal (Retry limit)
+   failed_attempts = {id: 0 for id in ids_to_scrape}
+   MAX_RETRIES = 3  # Maksimal percobaan ulang per ID
+
+   # Gunakan WHILE loop selama masih ada ID di antrean
+   while ids_to_scrape:
+      target_id = ids_to_scrape.pop(0) # Ambil ID paling depan
       payload = {"enemyHeroes": [target_id]}
       
       try:
+         # Timeout diset ke 5 detik
          response = requests.post(url, headers=headers, json=payload, timeout=5)
          
          if response.status_code == 200:
             json_data = response.json()
             
             if 'data' in json_data and len(json_data['data']) > 0:
-               
-               # ambil nama hero musuh
+               # Sukses ambil data
                target_hero_name = "Unknown"
                first_item = json_data['data'][0]
                if 'counteredHeroes' in first_item and len(first_item['counteredHeroes']) > 0:
                   target_hero_name = first_item['counteredHeroes'][0].get('name', 'Unknown')
 
-                  print(f"--ID {target_id} ({target_hero_name}) - {len(json_data['data'])} counter.")
+               print(f"--ID {target_id} ({target_hero_name}) - {len(json_data['data'])} counter. [SUCCESS]")
+               
+               for item in json_data['data']:
+                  roles = ", ".join(item.get('role', []))
+                  lanes = ", ".join(item.get('lane', []))
+                  specs = ", ".join(item.get('speciality', []))
                   
-                  for item in json_data['data']:
-                     roles = ", ".join(item.get('role', []))
-                     lanes = ", ".join(item.get('lane', []))
-                     specs = ", ".join(item.get('speciality', []))
-                     
-                     record = {
-                        'Target_ID': target_id,
-                        'Target_Name': target_hero_name,
-                        'Counter_Name': item.get('heroName'),
-                        'Score': item.get('score'),
-                        'Tier': item.get('tier'),
-                        'Role': roles,
-                        'Lane': lanes,
-                        'Speciality': specs
-                     }
-                     all_counter_data.append(record)
-               else:
-                  # jika id kosong, maka hero belum rilis
-                  pass
+                  record = {
+                     'Target_ID': target_id,
+                     'Target_Name': target_hero_name,
+                     'Counter_Name': item.get('heroName'),
+                     'Score': item.get('score'),
+                     'Tier': item.get('tier'),
+                     'Role': roles,
+                     'Lane': lanes,
+                     'Speciality': specs
+                  }
+                  all_counter_data.append(record)
             else:
-               print("--Failed, ID {target_id} tidak ditemukan. Status: {response_status_code}")
+               # ID Valid tapi datanya kosong (mungkin hero belum rilis di nomor itu)
+               # Tidak perlu retry
+               pass
+               
+         else:
+            # Jika server error (500, 502) kita anggap perlu retry juga
+            raise Exception(f"Status Code: {response.status_code}")
+
+         # Jeda normal jika sukses
+         time.sleep(random.uniform(0.5, 1.0))
+
       except Exception as e:
-         print(f"--\nID error {target_id}: {e}")
+         # --- LOGIC RETRY ---
+         current_retry = failed_attempts[target_id]
          
-      # jeda random agar tidak terdeteksi bot
-      time.sleep(random.uniform(0.5, 1.0))
+         if current_retry < MAX_RETRIES:
+            print(f"--!! ERROR ID {target_id}: {e}. Retrying ({current_retry + 1}/{MAX_RETRIES})...")
+            
+            # Tambahkan counter retry
+            failed_attempts[target_id] += 1
+            
+            # Masukkan kembali ID ke antrean paling belakang
+            ids_to_scrape.append(target_id)
+            
+            # Jeda lebih lama (Backoff) agar server tidak memblokir
+            time.sleep(2.0) 
+         else:
+            print(f"--XX GAVE UP ID {target_id}: {e}. Terlalu banyak error.")
 
    if all_counter_data:
       df = pd.DataFrame(all_counter_data)

@@ -7,7 +7,7 @@ from sklearn.naive_bayes import BernoulliNB
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_PATH = os.path.join(BASE_DIR, "data", "silver", "training_data.parquet")
+DATA_PATH = os.path.join(BASE_DIR, "data", "gold", "features_draft_model.parquet")
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
 
