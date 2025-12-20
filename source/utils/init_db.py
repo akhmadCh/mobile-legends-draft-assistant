@@ -23,10 +23,10 @@ def create_mock_sql():
       df = read_df_from_minio("mlbb-lakehouse", MINIO_PATH)
       
       # filter kolom
-      target_columns = ['Nama Hero', 'Win Rate', 'Pick Rate', 'Ban Rate', 'Speciality']
+      target_columns = ['Nama Hero', 'Win Rate', 'Pick Rate', 'Ban Rate', 'Role', 'Lane', 'Speciality']
       df_sql = df[target_columns].copy()
       
-      df_sql.columns = ['hero_name', 'win_rate', 'pick_rate', 'ban_rate', 'speciality']
+      df_sql.columns = ['hero_name', 'win_rate', 'pick_rate', 'ban_rate', 'role', 'lane', 'speciality']
 
       # --- SIMPAN KE SQLITE ---
       conn = sqlite3.connect(DB_NAME)

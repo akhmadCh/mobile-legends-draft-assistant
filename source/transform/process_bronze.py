@@ -19,11 +19,11 @@ BUCKET_NAME = "mlbb-lakehouse"
 def process_stats_sql():
     print("\n[1/4] Proses Hero Stats (SQL Source)")
     
-    df = read_df_from_minio(BUCKET_NAME, "raw/internal_db/hero_master_sql.csv")
+    df = read_df_from_minio(BUCKET_NAME, "raw/internal_db/hero_master.sql")
     
     if df is not None:
         # standarisasi nama kolom
-        df.columns = ['hero_name_raw', 'win_rate', 'pick_rate', 'ban_rate', 'speciality']
+        df.columns = ['hero_name_raw', 'win_rate', 'pick_rate', 'ban_rate', 'role', 'lane', 'speciality']
         
         # kolom normalized
         df['hero_name_normalized'] = df['hero_name_raw'].apply(normalize_hero_name)
@@ -31,7 +31,17 @@ def process_stats_sql():
         # cleaning tipe data persentase
         for col in ['win_rate', 'pick_rate', 'ban_rate']:
             df[col] = df[col].apply(clean_percentage)
-            
+        
+        # cleaning role dan lane
+        if 'role' and 'lane' in df.columns:
+            df['role'] = df['role'].astype(str).str.lower().str.strip()
+            df['lane'] = df['lane'].astype(str).str.lower().str.strip()
+        else:
+            # Fallback jika ternyata kolom role tidak ada di raw
+            print("--WARN: Kolom 'role' dan 'lane' tidak ditemukan di Raw SQL!")
+            df['role'] = 'Unknown'
+            df['lane'] = 'Unknown'
+        
         # add metadata
         df['data_source'] = 'internal_sql'
         df['ingested_at'] = get_timestamp()

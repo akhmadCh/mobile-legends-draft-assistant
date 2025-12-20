@@ -41,6 +41,9 @@ def scrape_hero_stats():
                      win_rate = f"{item.get('win_rate', 0)}%"
                      pick_rate = f"{item.get('pick_rate', 0)}%"
                      ban_rate = f"{item.get('ban_rate', 0)}%"
+                     
+                     role = ", ".join(item.get('role', []))
+                     lane = ", ".join(item.get('lane', []))
 
                      # store to dict
                      hero_stats_list.append({
@@ -49,6 +52,8 @@ def scrape_hero_stats():
                         'Win Rate': win_rate,
                         'Pick Rate': pick_rate,
                         'Ban Rate': ban_rate,
+                        'Role': role,
+                        'Lane': lane,
                         'Speciality': specs,
                         # metadata
                         'Rank Filter': item.get('rank_name', 'ALL'),
@@ -81,7 +86,7 @@ def scrape_hero_stats():
       df = pd.DataFrame(hero_stats_list)
       
       print("\n--- Preview Data ---")
-      print(df[['Nama Hero', 'Win Rate', 'Pick Rate', 'Rank Filter']].head(3).to_string(index=False))
+      print(df[['Nama Hero', 'Win Rate', 'Pick Rate', 'Ban Rate', 'Role', 'Lane', 'Speciality', 'Rank Filter']].head(3).to_string(index=False))
       
       upload_df_to_minio(df, "mlbb-lakehouse", MINIO_PATH)
       print(f"\n--SUCCESS, {len(df)} data save to MinIO in '{MINIO_PATH}'")
