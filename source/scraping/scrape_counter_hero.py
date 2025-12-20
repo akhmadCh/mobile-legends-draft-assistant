@@ -22,9 +22,9 @@ headers = {
 
 def scrape_counters():
    all_counter_data = []
-   print("Memulai scraping data counter (API)...")
+   print("--- START SCRAPING 'Counter and Tier' (API) ---")
 
-   # Range ID Hero (Estimasi 1 - 130 untuk cover hero baru)
+   # range id = hero ML saat ini yaitu 130
    for target_id in range(1, 131): 
       payload = {"enemyHeroes": [target_id]}
       
@@ -36,13 +36,13 @@ def scrape_counters():
             
             if 'data' in json_data and len(json_data['data']) > 0:
                
-               # Ambil Nama Hero Musuh (Target)
+               # ambil nama hero musuh
                target_hero_name = "Unknown"
                first_item = json_data['data'][0]
                if 'counteredHeroes' in first_item and len(first_item['counteredHeroes']) > 0:
                   target_hero_name = first_item['counteredHeroes'][0].get('name', 'Unknown')
 
-                  print(f"   [OK] ID {target_id} ({target_hero_name}) - {len(json_data['data'])} counter.")
+                  print(f"--ID {target_id} ({target_hero_name}) - {len(json_data['data'])} counter.")
                   
                   for item in json_data['data']:
                      roles = ", ".join(item.get('role', []))
@@ -61,30 +61,28 @@ def scrape_counters():
                      }
                      all_counter_data.append(record)
                else:
-                  # ID Kosong (Hero belum rilis/skip ID)
+                  # jika id kosong, maka hero belum rilis
                   pass
             else:
-               print(f"   [FAIL] ID {target_id} Status: {response.status_code}")
-               
+               print("--Failed, ID {target_id} tidak ditemukan. Status: {response_status_code}")
       except Exception as e:
-         print(f"   [ERR] ID {target_id}: {e}")
+         print(f"--\nID error {target_id}: {e}")
          
-      # Jeda random agar tidak terdeteksi bot
+      # jeda random agar tidak terdeteksi bot
       time.sleep(random.uniform(0.5, 1.0))
 
-   # --- UPLOAD KE MINIO ---
    if all_counter_data:
       df = pd.DataFrame(all_counter_data)
+      
+      print("\n--- Preview Data ---")
+      print(df.head())
       
       # Simpan ke MinIO Raw Layer
       upload_df_to_minio(df, "mlbb-lakehouse", "raw/counter/data_counter.csv")
       
-      print("\n" + "="*50)
-      print(f"✅ SELESAI! {len(df)} baris data terupload ke MinIO.")
-      print("="*50)
-      print(df.head())
+      print(f"\n--SUCCESS, {len(df)} data save to MinIO in 'raw/counter/data_counter.csv'")
    else:
-      print("\n⚠️ Tidak ada data counter yang tersimpan.")
+      print("--FAILED, no data found.")
 
 if __name__ == "__main__":
    scrape_counters()

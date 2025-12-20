@@ -9,7 +9,7 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from source.utils.minio_helper import upload_df_to_minio
 
-# URL Target
+# URL target
 URLS = {
    "ID": "https://liquipedia.net/mobilelegends/MPL/Indonesia/Season_16/Regular_Season",
    "PH": "https://liquipedia.net/mobilelegends/MPL/Philippines/Season_16/Regular_Season",
@@ -34,7 +34,7 @@ def parse_match_popup(soup, match_order):
    if len(opponents) > 0 and 'match-info-header-winner' in opponents[0].get('class', []): winner = team_left
    elif len(opponents) > 1 and 'match-info-header-winner' in opponents[1].get('class', []): winner = team_right
 
-   # 2.Helper Ekstrak Hero dari Gambar
+   # 2. helper ekstrak untuk gambar tiap hero
    def extract_heroes(container):
       if not container: return []
       heroes = []
@@ -50,7 +50,7 @@ def parse_match_popup(soup, match_order):
             heroes.append(clean_name)
       return list(dict.fromkeys(heroes)) # Hapus duplikat
 
-   # 3. Ambil Picks & Bans
+   # 3. ambil informasi picks dan bans
    game_picks = []
    pick_divs = soup.find_all('div', class_='brkts-popup-body-game')
    for p_div in pick_divs:
@@ -70,7 +70,7 @@ def parse_match_popup(soup, match_order):
          if len(tds) >= 2:
             game_bans.append({'left': extract_heroes(tds[0]), 'right': extract_heroes(tds[1])})
 
-   # 4. Gabungkan per Game
+   # 4. gabungkan menjadi satu game
    max_games = max(len(game_picks), len(game_bans))
    for g_idx in range(max_games):
       p = game_picks[g_idx] if g_idx < len(game_picks) else {'left': [], 'right': []}
@@ -94,11 +94,11 @@ def run_scraper():
    driver = setup_driver()
    try:
       for region, url in URLS.items():
-         print(f"🕷️ Scraping {region} ({url})...")
+         print(f"--- START SCRAPING TOURNAMENT DATA FOR {region} ({url}) ---")
          driver.get(url)
          time.sleep(5)
          
-         # A. Buka Popup Match
+         # A. buka pop up match di website
          toggles = driver.find_elements(By.CSS_SELECTOR, "div.brkts-popup-trigger")
          print(f"   Found {len(toggles)} matches. Opening popups...")
          for toggle in toggles:
@@ -107,7 +107,7 @@ def run_scraper():
                time.sleep(0.1)
             except: pass
          
-         # B. Buka Tombol Show Bans
+         # B. buka tombol informasi show bans
          time.sleep(2)
          shows = driver.find_elements(By.CSS_SELECTOR, ".collapseButtonShow")
          for btn in shows:
@@ -115,9 +115,9 @@ def run_scraper():
                if btn.is_displayed(): driver.execute_script("arguments[0].click();", btn)
             except: pass
          
-         time.sleep(5) # Tunggu gambar load
+         time.sleep(5)
          
-         # C. Parsing HTML
+         # C. parsing HTML
          full_soup = BeautifulSoup(driver.page_source, 'html.parser')
          popups = full_soup.find_all('div', class_='brkts-popup')
          
@@ -126,15 +126,15 @@ def run_scraper():
             match_rows = parse_match_popup(popup, i+1)
             region_data.extend(match_rows)
          
-         # D. Upload ke MinIO
          if region_data:
             df = pd.DataFrame(region_data)
+            # minio path, but flexible filename
             filename = f"mpl_{region.lower()}_s16.csv"
             # Simpan ke bucket raw/mpl_matches
             upload_df_to_minio(df, "mlbb-lakehouse", f"raw/mpl_matches/{filename}")
+            print(f"\n--SUCCESS, {len(df)} data save to MinIO in 'raw/mpl_matches/{filename}'")
          else:
-            print(f"   [WARN] No data found for {region}")
-            
+            print("--FAILED, no data found for {region}.")
    finally:
       driver.quit()
 
