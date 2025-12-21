@@ -84,6 +84,10 @@ def transform_calculate_scores(df_matches, df_counter):
    counter_dict = {}
    if df_counter is not None:
       for hero, counter, score in zip(df_counter['hero_name_normalized'], df_counter['counter_name_normalized'], df_counter['score']):
+         # paksa string & lowercase saat bikin kamus
+         # h = str(hero).strip().lower()
+         # c = str(counter).strip().lower()
+         # counter_dict[(h, c)] = score
          
          counter_dict[(hero, counter)] = score
          
