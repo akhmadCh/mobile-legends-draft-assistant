@@ -44,6 +44,7 @@ services:
       - ./data:/app/data # Baca data dari Lake
       - ./source:/app/source # Baca logika model
       - ./models:/app/models
+      - ./model_draft_mlbb.pkl:/app/model_draft_mlbb.pkl
     ports:
       - "8501:8501"
     command: streamlit run streamlit_app/main.py --server.address=0.0.0.0

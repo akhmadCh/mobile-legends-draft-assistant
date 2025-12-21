@@ -60,7 +60,7 @@ if 'draft_history' not in st.session_state:
 
 # --- Sidebar Configuration ---
 with st.sidebar:
-    st.header("⚙️ Konfigurasi Awal")
+    st.header("PILIHAN AWAL")
     
     first_pick_side = st.radio(
         "Siapa First Pick?", 
@@ -228,8 +228,11 @@ with col_mid:
             st.markdown('</div>', unsafe_allow_html=True)
             
         else:
-            st.warning(f"⏳ Menunggu Musuh memilih {cur_phase}...")
-            st.caption("Analisis akan muncul setelah musuh memilih.")
+            # st.warning(f"⏳ Menunggu Musuh memilih {cur_phase}...")
+            # st.caption("Analisis akan muncul setelah musuh memilih.")
+            st.error(f"⚠️ GILIRAN MUSUH ({cur_phase.upper()})")
+            st.write("Silakan input pilihan musuh secara manual di panel **Sebelah Kanan (Red Team)**.")
+            st.caption("AI menunggu input Anda untuk melanjutkan analisis.")
     else:
         st.success("Draft Selesai!")
 

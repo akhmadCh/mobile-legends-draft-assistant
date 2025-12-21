@@ -35,7 +35,7 @@ def ensure_list(val):
             clean_str = val.replace('\n', '').strip()
             # Handle format numpy string yg aneh (e.g. "['a' 'b']") yg gak ada koma
             if "' '" in clean_str or '" "' in clean_str:
-                 clean_str = clean_str.replace("' '", "', '").replace('" "', '", "')
+                clean_str = clean_str.replace("' '", "', '").replace('" "', '", "')
             return ast.literal_eval(clean_str)
         except:
             return [] # Gagal parse
@@ -112,9 +112,9 @@ def transform_calculate_scores(df_matches, df_counter):
    if df_counter is not None:
       for hero, counter, score in zip(df_counter['hero_name_normalized'], df_counter['counter_name_normalized'], df_counter['score']):
          # paksa string & lowercase saat bikin kamus
-         # h = str(hero).strip().lower()
-         # c = str(counter).strip().lower()
-         # counter_dict[(h, c)] = score
+        #  h = str(hero).strip().lower()
+        #  c = str(counter).strip().lower()
+        #  counter_dict[(h, c)] = score
          
          counter_dict[(hero, counter)] = score
          
@@ -129,7 +129,6 @@ def transform_calculate_scores(df_matches, df_counter):
       # validasi tipe data list
       if not isinstance(left_heroes, (list, np.ndarray)): left_heroes = []
       if not isinstance(right_heroes, (list, np.ndarray)): right_heroes = []
-      
 
       # skor tim kiri (vs Kanan)
       for hero_raw, hero_clean in zip(left_heroes, left_heroes):
@@ -212,6 +211,11 @@ def run_silver_pipeline():
     
     upload_df_to_minio(df_final, BUCKET_NAME, "silver/silver_draft_enriched.parquet", file_format='parquet')
     print(f"--DONE: silver_draft_enriched.parquet ({len(df_final)} rows)")
+    
+    # --- STEP 4: PREVIEW DATA ---
+    print('\n4/4 Preview Data untuk verifikasi:')
+    print('Sample 2 baris features tim:')
+    print(df_final[['team_name', 'team_side', 'hero_name_normalized', 'pick_rate', 'win_rate', 'tier_score', 'counter_score', 'is_winner_team']].head(40))
     
     print("\nSILVER PIPELINE COMPLETED")
 
