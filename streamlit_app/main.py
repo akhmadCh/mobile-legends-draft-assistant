@@ -15,71 +15,127 @@ st.set_page_config(page_title="MLBB Draft Strategist", layout="wide", page_icon=
 # --- STYLING (CSS) ---
 st.markdown("""
 <style>
-    /* Global Fonts */
-    .big-title { font-size: 40px; font-weight: 800; text-align: center; margin-bottom: 20px; letter-spacing: 1px; }
-    
-    /* Headers */
-    .section-header { text-align: center; font-size: 24px; font-weight: bold; margin: 20px 0 10px 0; text-transform: uppercase; letter-spacing: 1px; }
-    
-    .blue-header { color: #42A5F5; border-bottom: 4px solid #42A5F5; padding-bottom: 5px; margin-bottom: 15px; font-weight: 900; text-align: center; font-size: 22px; }
-    .red-header { color: #EF5350; border-bottom: 4px solid #EF5350; padding-bottom: 5px; margin-bottom: 15px; font-weight: 900; text-align: center; font-size: 22px; }
 
-    /* Input Box Styling (Agar Lebar & Jelas) */
-    .stSelectbox label { font-size: 16px; font-weight: bold; }
-    div[data-baseweb="select"] > div {
-        min-height: 50px !important;
-        background-color: #f8f9fa !important;
-        border: 1px solid #ccc !important;
-    }
-    div[data-baseweb="select"] span {
-        font-size: 18px !important; 
-        font-weight: 600 !important;
-        line-height: 50px !important;
-    }
+/* ===== GLOBAL THEME ===== */
+html, body, [class*="css"] {
+    background: radial-gradient(circle at top, #0b1a2a, #05070d);
+    color: #e5e7eb;
+    font-family: 'Segoe UI', sans-serif;
+}
 
-    /* Turn Indicator */
-    .turn-box {
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        text-align: center;
-        font-weight: bold;
-        font-size: 20px;
-        border: 3px solid #FFD700;
-        background-color: rgba(255, 215, 0, 0.15);
-        animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4); }
-        70% { box-shadow: 0 0 0 10px rgba(255, 215, 0, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
-    }
+/* ===== TITLE ===== */
+.big-title {
+    font-size: 44px;
+    font-weight: 900;
+    text-align: center;
+    margin: 12px 0 28px 0;
+    color: #f5c77a;
+    text-shadow: 0 0 14px rgba(245,199,122,0.45);
+}
 
-    /* Ban Summary (Read Only) */
-    .ban-tag {
-        display: inline-block;
-        padding: 5px 10px;
-        margin: 2px;
-        background-color: #444;
-        color: #fff;
-        border-radius: 4px;
-        font-size: 14px;
-    }
-    
-    /* Recommendations */
-    .rec-card {
-        background-color: #fff;
-        color: #333;
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 6px solid #00C851;
-        margin-bottom: 10px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .rec-hero-name { font-size: 20px; font-weight: 800; color: #000; margin-bottom: 4px;}
-    .rec-reason { font-size: 14px; color: #555; line-height: 1.4; }
+/* ===== SECTION ===== */
+.section-header {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 800;
+    margin: 22px 0 14px 0;
+    letter-spacing: 1px;
+    color: #cbd5e1;
+}
+
+/* ===== TEAM HEADER ===== */
+.blue-header, .red-header {
+    text-align: center;
+    font-size: 20px;
+    font-weight: 900;
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.blue-header {
+    background: linear-gradient(135deg, #1e3a8a, #2563eb);
+    box-shadow: 0 0 18px rgba(59,130,246,0.6);
+}
+
+.red-header {
+    background: linear-gradient(135deg, #7f1d1d, #dc2626);
+    box-shadow: 0 0 18px rgba(239,68,68,0.6);
+}
+
+/* ===== SELECTBOX SLOT ===== */
+div[data-baseweb="select"] > div {
+    min-height: 54px;
+    background: linear-gradient(180deg, #020617, #020617);
+    border-radius: 12px;
+    border: 1px solid #334155;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.9);
+}
+
+div[data-baseweb="select"] span {
+    font-size: 17px;
+    font-weight: 700;
+    color: #e5e7eb;
+}
+
+/* ===== TURN INDICATOR ===== */
+.turn-box {
+    padding: 14px;
+    border-radius: 14px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 14px;
+    color: #fde68a;
+    background: rgba(253,224,71,0.08);
+    border: 2px solid #fde68a;
+    box-shadow: 0 0 22px rgba(253,224,71,0.7);
+    animation: glow 1.4s infinite alternate;
+}
+
+@keyframes glow {
+    from { box-shadow: 0 0 10px rgba(253,224,71,0.4); }
+    to { box-shadow: 0 0 22px rgba(253,224,71,0.9); }
+}
+
+/* ===== BAN TAG ===== */
+.ban-tag {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 3px;
+    background: #020617;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #e5e7eb;
+}
+
+/* ===== RECOMMENDATION CARD ===== */
+.rec-card {
+    background: linear-gradient(180deg, #020617, #020617);
+    padding: 16px;
+    border-radius: 16px;
+    margin-bottom: 14px;
+    border-left: 4px solid #22c55e;
+    box-shadow: 0 0 18px rgba(34,197,94,0.25);
+}
+
+.rec-hero-name {
+    font-size: 20px;
+    font-weight: 900;
+    color: #f8fafc;
+    margin-bottom: 6px;
+}
+
+.rec-reason {
+    font-size: 14px;
+    color: #cbd5e1;
+    line-height: 1.5;
+}
+
 </style>
 """, unsafe_allow_html=True)
+
 
 # --- LOAD RESOURCES & BUILD HERO REGISTRY ---
 @st.cache_resource
@@ -381,7 +437,7 @@ elif st.session_state.draft_stage == 'pick':
             else:
                 st.caption("Data history belum cukup.")
         elif current_turn:
-             st.info("Menunggu Musuh Pick...")
+            st.info("Menunggu Musuh Pick...")
         else:
             st.success("Draft Selesai!")
             st.balloons()
