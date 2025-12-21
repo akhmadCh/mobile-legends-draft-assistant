@@ -1,25 +1,36 @@
 import re
 from datetime import datetime
 
+HERO_ALIAS = {
+   "wu ze tian": "zetian",
+   "wuzetian": "zetian",
+   "wu zhe tian": "zetian",
+}
+
 def get_timestamp():
    """return waktu saat ini untuk metadata"""
    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def normalize_hero_name(name: str) -> str:
-   """
-   Membersihkan nama hero.
-   Contoh: "Claude 2024" -> "claude"
-   Logic: Lowercase -> Hapus Tahun (4 digit) -> Hapus spasi
-   """
    if not isinstance(name, str):
       return None
 
    name = name.lower().strip()
-   name = re.sub(r"\s\d{4}$", "", name)
    name = name.replace("-", " ")
-   name = re.sub(r"\s+", " ", name)
 
-   return name
+   # hapus tahun dan versi
+   name = re.sub(r'(?:\d{4}v?\d*|v\d+)$', '', name)
+
+   # bersihkan karakter tapi tetap simpan spasi
+   name = re.sub(r'[^a-z ]', '', name)
+   name = re.sub(r'\s+', ' ', name).strip()
+
+   # alias HARUS di sini
+   name = HERO_ALIAS.get(name, name)
+
+   # canonical key tanpa spasi
+   return name.replace(" ", "")
+
 
 def clean_percentage(value):
    """ubah '50%' (str) jadi 50.0 (float)"""

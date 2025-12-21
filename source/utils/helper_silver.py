@@ -1,20 +1,7 @@
 import numpy as np
 import re
 
-def normalize_name_strict(text):
-   """
-   Normalisasi super ketat:
-   1. Lowercase
-   2. Hapus Spasi, Titik, Strip, Koma
-   3. Hapus angka tahun (2024)
-   Contoh: "Yi Sun-shin" -> "yisunshin", "Yi Sun Shin" -> "yisunshin"
-   """
-   if not isinstance(text, str): return ""
-   clean = text.lower()
-   # Hapus semua yg bukan huruf/angka
-   clean = re.sub(r'[^a-z0-9]', '', clean)
 
-   return clean
 
 def calculate_avg_counter_score(hero_name, enemy_team_list, counter_dict):
    """
@@ -31,11 +18,6 @@ def calculate_avg_counter_score(hero_name, enemy_team_list, counter_dict):
    count = 0
    
    for enemy in enemy_team_list:
-      # --- PERUBAHAN UTAMA DISINI ---
-      # Kita cek: Apakah Enemy (Target) di-counter oleh Hero_Name (Counter)?
-      # Key Dictionary: (Target, Counter)
-      
-      # Opsi A: Offensive Score (Keuntungan Saya) -> REKOMENDASI SAYA
       score = counter_dict.get((enemy, hero_name), 0.0)
       
       # Opsi B: Net Score (Keuntungan - Kerugian) -> Lebih Komplex
