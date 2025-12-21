@@ -154,7 +154,7 @@ def run_gold_pipeline():
     # --- STEP 4: PREVIEW DATA ---
     print('\n4/4 Preview Data untuk verifikasi:')
     print('Sample 2 baris features tim:')
-    print(df_gold_matches[['team_name', 'avg_win_rate_team', 'avg_counter_score_team', 'is_winner_team']].head(2))
+    print(df_gold_matches[['team_name', 'avg_win_rate_team', 'avg_counter_score_team', 'is_winner_team']].head(10))
     
     print("\nGOLD PIPELINE COMPLETED")
 
