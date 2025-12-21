@@ -59,8 +59,6 @@ def create_ml_features(df_silver_enriched):
         
     df_features = pd.DataFrame(matches)
     
-    # --- PERBAIKAN DI SINI ---
-    
     # 1. Pisahkan kolom Hero dan Statistik
     hero_cols = [c for c in df_features.columns if 'Hero_' in c]
     stats_cols = [c for c in df_features.columns if 'Hero_' not in c]
@@ -108,6 +106,11 @@ def run_gold_pipeline():
     df_dashboard = create_hero_leaderboard(df_silver)
     upload_df_to_minio(df_dashboard, BUCKET_NAME, "gold/hero_leaderboard.parquet", file_format='parquet')
     print(f"DONE: Leaderboard saved ({len(df_dashboard)} heroes)")
+    
+    # --- STEP 4: PREVIEW DATA ---
+    print('\n4/4 Preview Data untuk verifikasi:')
+    print('Sample 2 baris features tim:')
+    print(df_ml[['team_name', 'team_side', 'hero_name_normalized', 'pick_rate', 'win_rate', 'tier_score', 'counter_score', 'is_winner_team']].head(40))
 
 if __name__ == "__main__":
     run_gold_pipeline()

@@ -145,16 +145,27 @@ def run_gold_pipeline():
     
     # --- STEP 3: CREATE GOLD MATCH FEATURES ---
     print('\n3/4 Create Table 2: Gold Match Features (ML Ready)...')
-    df_gold_team = transform_gold_match_features(df_gold_picks)
-    df_gold_matches = transform_gold_match_features(df_gold_picks)
+    df_gold_picks = transform_gold_pick_features(df_silver)
+    df_gold_team = transform_gold_match_features(df_gold_picks) # Ini level TIM
     
-    upload_df_to_minio(df_gold_matches, BUCKET_NAME, "gold/gold_match_features.parquet", file_format='parquet')
-    print(f"DONE: gold_match_features.parquet ({len(df_gold_matches)} rows)")
+    upload_df_to_minio(df_gold_team, BUCKET_NAME, "gold/gold_match_features.parquet", file_format='parquet')
+    print(f"DONE: gold_match_features.parquet ({len(df_gold_team)} rows)")
     
-    # --- STEP 4: PREVIEW DATA ---
+    print('\n4/5 Create Final Training Data (Match Level T1 vs T2)...')
+    df_training = transform_gold_match_level(df_gold_team)
+    
+    # Hitung Diff (Selisih) disini agar siap saji untuk XGBoost
+    df_training['diff_counter'] = df_training['avg_counter_score_team_left'] - df_training['avg_counter_score_team_right']
+    df_training['diff_meta'] = df_training['avg_meta_score_team_left'] - df_training['avg_meta_score_team_right']
+    df_training['diff_win_rate'] = df_training['avg_win_rate_team_left'] - df_training['avg_win_rate_team_right']
+    
+    upload_df_to_minio(df_training, BUCKET_NAME, "gold/gold_training_dataset.parquet", file_format='parquet')
+    print(f"DONE: gold_training_dataset.parquet ({len(df_training)} matches)")
+    
+    # --- STEP 5: PREVIEW DATA ---
     print('\n4/4 Preview Data untuk verifikasi:')
     print('Sample 2 baris features tim:')
-    print(df_gold_matches[['team_name', 'avg_win_rate_team', 'avg_counter_score_team', 'is_winner_team']].head(10))
+    print(df_gold_team[['team_name', 'avg_win_rate_team', 'avg_counter_score_team', 'is_winner_team']].head(40))
     
     print("\nGOLD PIPELINE COMPLETED")
 
