@@ -1,12 +1,17 @@
 version: '3.8'
 
 services:
-  # 1. AIRFLOW
+  # 1. AIRFLOW (Updated for Selenium/Chrome)
   airflow:
     build:
       context: .
-      dockerfile: docker/airflow.Dockerfile
+      # MENGGUNAKAN DOCKERFILE BARU YANG ADA CHROME-NYA
+      dockerfile: docker/airflow_selenium.Dockerfile
     container_name: uas_airflow
+    
+    # AGAR CHROME TIDAK CRASH
+    shm_size: '2g'
+    
     environment:
       # SequentialExecutor
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
@@ -14,6 +19,11 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - _AIRFLOW_DB_UPGRADE=true
       - AIRFLOW__WEBSERVER__SECRET_KEY=ini_rahasia_uas
+      # minio
+      # - MINIO_ENDPOINT=minio:9000
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
 
       # credentials
       - AIRFLOW__WEBSERVER__RBAC=True
@@ -33,32 +43,37 @@ services:
       - "8080:8080"
     command: airflow standalone
 
-  # 2. STREAMLIT (Untuk Tampilan Web / Frontend)
+  # 2. STREAMLIT (Tetap Sama)
   streamlit:
     build:
       context: .
       dockerfile: docker/app.Dockerfile
     container_name: uas_frontend
+    environment:
+      # minio
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
     volumes:
-      - ./streamlit_app:/app/streamlit_app # Kodingan UI masuk sini
-      - ./data:/app/data # Baca data dari Lake
-      - ./source:/app/source # Baca logika model
+      - ./streamlit_app:/app/streamlit_app
+      - ./data:/app/data
+      - ./source:/app/source
       - ./models:/app/models
       - ./model_draft_mlbb.pkl:/app/model_draft_mlbb.pkl
     ports:
       - "8501:8501"
     command: streamlit run streamlit_app/main.py --server.address=0.0.0.0
 
-  # 3. MINIO (OBJECT STORAGE - Untuk Gambar Hero)
+  # 3. MINIO (Tetap Sama)
   minio:
     image: minio/minio:latest
     container_name: uas_minio
     ports:
-      - "9000:9000" # Port API (Untuk script Python)
-      - "9001:9001" # Port Console (Untuk buka di Browser)
+      - "9000:9000"
+      - "9001:9001"
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     command: server /data --console-address ":9001"
     volumes:
-      - ./minio_data:/data # Agar data gambar tidak hilang saat container mati
+      - ./minio_data:/data

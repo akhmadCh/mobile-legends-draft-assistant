@@ -18,8 +18,10 @@ URLS = {
 
 def setup_driver():
    chrome_options = Options()
+   chrome_options.add_argument("--headless") # Jalan tanpa GUI
+   chrome_options.add_argument("--no-sandbox") # Bypass security sandbox docker
+   chrome_options.add_argument("--disable-dev-shm-usage") # Mengatasi memory issue di docker
    chrome_options.add_argument("--disable-gpu")
-   chrome_options.add_argument("--start-maximized")
    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
 def parse_match_popup(soup, match_order):
