@@ -77,15 +77,32 @@ def create_ml_features(df_silver_enriched):
     return df_features
 
 def create_hero_leaderboard(df_silver_enriched):
-    """ Sama seperti sebelumnya """
     print("--LOGIC: Creating Hero Leaderboard")
     df = df_silver_enriched[df_silver_enriched['phase'] == 'pick']
+    
     leaderboard = df.groupby('hero_name_normalized').agg(
         total_picks=('match_id', 'count'),
         total_wins=('is_winner_team', 'sum'),
         avg_counter_score=('counter_score', 'mean')
     ).reset_index()
-    leaderboard['win_rate'] = leaderboard['total_wins'] / leaderboard['total_picks']
+    
+    leaderboard['win_rate'] = df['win_rate']
+    leaderboard['tier_score'] = df['tier_score']
+    leaderboard['pick_rate'] = df['pick_rate']
+    leaderboard['ban_rate'] = df['ban_rate']
+    leaderboard['role'] = df['role']
+    leaderboard['lane'] = df['lane']
+    
+    # leaderboard['win_rate'] = leaderboard['total_wins'] / leaderboard['total_picks']
+    # leaderboard['ban_rate'] = 1 - leaderboard['avg_counter_score']
+    # leaderboard['pick_rate'] = leaderboard['total_picks'] / len(df['match_id'].unique())
+    
+    leaderboard = leaderboard.sort_values(by='win_rate', ascending=False).reset_index(drop=True)
+    leaderboard.index += 1
+    leaderboard.index.name = 'rank'
+    leaderboard.reset_index(inplace=True)
+    leaderboard.rename(columns={'hero_name_normalized': 'hero_name'}, inplace=True)
+    
     return leaderboard
 
 def run_gold_pipeline():
@@ -110,7 +127,9 @@ def run_gold_pipeline():
     # --- STEP 4: PREVIEW DATA ---
     print('\n4/4 Preview Data untuk verifikasi:')
     print('Sample 2 baris features tim:')
-    print(df_ml[['team_name', 'team_side', 'hero_name_normalized', 'pick_rate', 'win_rate', 'tier_score', 'counter_score', 'is_winner_team']].head(40))
+    print(df_ml.head(40))
+    print('Sample 2 baris leaderboard hero:')
+    print(df_dashboard.head(40))
 
 if __name__ == "__main__":
     run_gold_pipeline()

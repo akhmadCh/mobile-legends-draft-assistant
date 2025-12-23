@@ -13,7 +13,7 @@ class DraftPredictor:
         
         # Load Model & Feature Names (Sekarang jadi satu paket dalam pickle)
         if not os.path.exists(self.model_path):
-            raise FileNotFoundError(f"❌ Model tidak ditemukan di {self.model_path}. Jalankan source/ml/train_model.py dulu!")
+            raise FileNotFoundError(f"--ERROR:Model tidak ditemukan di {self.model_path}. Jalankan source/ml/train_model.py dulu!")
 
         print(f"Loading model from: {self.model_path}")
         with open(self.model_path, "rb") as f:

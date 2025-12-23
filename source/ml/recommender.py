@@ -1,13 +1,32 @@
 import pandas as pd
-import os
+import os, sys
 import numpy as np
+# Setup path agar bisa import helper
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+from source.utils.minio_helper import read_df_from_minio
 
 class DraftRecommender:
     def __init__(self):
         # Setup path relatif
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.stats_path = os.path.join(BASE_DIR, "data", "raw", "data_statistik_hero.csv")
-        self.counter_path = os.path.join(BASE_DIR, "data", "raw", "data_counter_mlbb.csv")
+        
+        # membaca file dari gold layer
+        self.gold_path = read_df_from_minio(
+            "mlbb-lakehouse", 
+            "gold/hero_leaderboard.parquet", 
+            file_format='parquet'
+        )
+        
+        # membaginya menjadi stats dan path
+        if self.gold_path is not None:
+            self.df_stats = self.gold_path
+            self.df_counters = None
+        else:
+            self.df_stats = None
+            self.df_counters = None
+        
+        # self.stats_path = os.path.join(BASE_DIR, "data", "raw", "data_statistik_hero.csv")
+        # self.counter_path = os.path.join(BASE_DIR, "data", "raw", "data_counter_mlbb.csv")
         
         # Load Data
         self.df_stats = self._load_stats()

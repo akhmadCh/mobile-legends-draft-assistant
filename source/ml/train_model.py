@@ -24,13 +24,13 @@ def clean_feature_names(df):
     return new_cols
 
 def train_win_predictor():
-    print("--- 🚀 START TRAINING (XGBOOST + HYPERPARAMETER TUNING) ---")
+    print("--- START TRAINING (XGBOOST + HYPERPARAMETER TUNING) ---")
     
     # 1. Load Data dari Gold Layer
     print("Loading data from MinIO...")
     df = read_df_from_minio(BUCKET_NAME, "gold/features_draft_model.parquet", file_format='parquet')
     if df is None: 
-        print("❌ Data not found in Gold Layer.")
+        print("--ERROR: Data not found in Gold Layer.")
         return
 
     # 2. Fitur Engineering
@@ -38,7 +38,7 @@ def train_win_predictor():
     
     # A. Ambil Fitur Statistik
     stats_cols = ['T1_Avg_WinRate', 'T1_Total_Counter', 'T1_Avg_Tier',
-                  'T2_Avg_WinRate', 'T2_Total_Counter', 'T2_Avg_Tier']
+                'T2_Avg_WinRate', 'T2_Total_Counter', 'T2_Avg_Tier']
     
     # B. Ambil Fitur Nama Hero (One Hot Encoding)
     hero_cols = [c for c in df.columns if 'Hero_' in c]
@@ -99,7 +99,7 @@ def train_win_predictor():
     
     # Ambil model terbaik
     best_model = random_search.best_estimator_
-    print(f"\n✅ Best Params: {random_search.best_params_}")
+    print(f"\n--DONE: Best Params: {random_search.best_params_}")
     
     # 5. Evaluasi
     y_pred = best_model.predict(X_test)
@@ -108,7 +108,7 @@ def train_win_predictor():
     acc = accuracy_score(y_test, y_pred)
     roc_auc = roc_auc_score(y_test, y_prob)
     
-    print(f"\n--- 🏆 HASIL AKHIR ---")
+    print(f"\n--- HASIL AKHIR ---")
     print(f"Akurasi Model : {acc:.2f} ({acc*100:.1f}%)")
     print(f"ROC-AUC Score : {roc_auc:.3f}")
     print("\nClassification Report:")
@@ -123,7 +123,7 @@ def train_win_predictor():
     
     with open(MODEL_FILENAME, "wb") as f:
         pickle.dump(artifact, f)
-    print(f"✅ Model Saved as {MODEL_FILENAME}.")
+    print(f"--SAVED: Model Saved as {MODEL_FILENAME}.")
 
 if __name__ == "__main__":
     train_win_predictor()
