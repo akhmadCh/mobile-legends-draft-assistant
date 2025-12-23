@@ -1,81 +1,90 @@
 import pandas as pd
 import os, sys
 import numpy as np
+
 # Setup path agar bisa import helper
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from source.utils.minio_helper import read_df_from_minio
 
+BUCKET_NAME = "mlbb-lakehouse"
+
 class DraftRecommender:
     def __init__(self):
-        # Setup path relatif
-        BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        print("--- [INFO] Initializing Draft Recommender from GOLD Layer ---")
         
-        # membaca file dari gold layer
-        self.gold_path = read_df_from_minio(
-            "mlbb-lakehouse", 
+        # 1. Load Leaderboard (Data Statistik & Meta)
+        # Berisi: hero_name, win_rate, pick_rate, ban_rate, role, lane, tier_score
+        self.df_stats = read_df_from_minio(
+            BUCKET_NAME, 
             "gold/hero_leaderboard.parquet", 
             file_format='parquet'
         )
         
-        # membaginya menjadi stats dan path
-        if self.gold_path is not None:
-            self.df_stats = self.gold_path
-            self.df_counters = None
+        # 2. Load Counter Reference (Data Hubungan Counter)
+        # Berisi: hero_target, hero_counter, counter_score
+        self.df_counters = read_df_from_minio(
+            BUCKET_NAME, 
+            "gold/hero_counter_lookup.parquet", 
+            file_format='parquet'
+        )
+        
+        # 3. Validasi & Mapping Kolom
+        # Agar logika di bawah tidak perlu diubah total, kita samakan nama kolomnya
+        if self.df_stats is not None and not self.df_stats.empty:
+            self.df_stats = self.df_stats.rename(columns={
+                'hero_name_raw': 'Nama Hero',
+                'win_rate': 'Win Rate',
+                'ban_rate': 'Ban Rate',
+                'pick_rate': 'Pick Rate',
+                'lane': 'Lane',
+                'role': 'Role',
+                'tier_score': 'Tier'
+            })
+            # Pastikan tipe data float aman
+            self.df_stats['Win Rate'] = self.df_stats['Win Rate'].fillna(0.0).astype(float)
+            self.df_stats['Ban Rate'] = self.df_stats['Ban Rate'].fillna(0.0).astype(float)
         else:
-            self.df_stats = None
-            self.df_counters = None
-        
-        # self.stats_path = os.path.join(BASE_DIR, "data", "raw", "data_statistik_hero.csv")
-        # self.counter_path = os.path.join(BASE_DIR, "data", "raw", "data_counter_mlbb.csv")
-        
-        # Load Data
-        self.df_stats = self._load_stats()
-        self.df_counters = self._load_counters()
+            print("⚠️ WARNING: Data Leaderboard Kosong/Gagal Load!")
+            self.df_stats = pd.DataFrame()
 
-    def _load_stats(self):
-        try:
-            if not os.path.exists(self.stats_path): return pd.DataFrame()
-            df = pd.read_csv(self.stats_path)
-            # Bersihkan persentase
-            for col in ['Win Rate', 'Ban Rate', 'Pick Rate']:
-                if col in df.columns and df[col].dtype == object:
-                    df[col] = df[col].str.rstrip('%').astype('float') / 100.0
-            return df
-        except Exception as e:
-            print(f"Error loading stats: {e}")
-            return pd.DataFrame()
-
-    def _load_counters(self):
-        try:
-            if not os.path.exists(self.counter_path): return pd.DataFrame()
-            return pd.read_csv(self.counter_path)
-        except Exception as e:
-            print(f"Error loading counters: {e}")
-            return pd.DataFrame()
+        if self.df_counters is not None and not self.df_counters.empty:
+            self.df_counters = self.df_counters.rename(columns={
+                'hero_target': 'Target_Name',
+                'hero_counter': 'Counter_Name',
+                'counter_score': 'Score'
+            })
+        else:
+            print("⚠️ WARNING: Data Counter Kosong/Gagal Load!")
+            self.df_counters = pd.DataFrame()
 
     def get_hero_info(self, hero_name):
         if self.df_stats.empty: return None
+        # Normalisasi nama (antisipasi huruf besar/kecil)
+        hero_name = str(hero_name).title() 
         row = self.df_stats[self.df_stats['Nama Hero'] == hero_name]
         return row.iloc[0] if not row.empty else None
 
     def get_team_missing_roles(self, current_team):
-        """Menganalisis role apa yang belum diisi oleh tim."""
+        """Menganalisis role/lane apa yang belum diisi oleh tim."""
         filled_lanes = []
         for hero in current_team:
             info = self.get_hero_info(hero)
             if info is not None and isinstance(info['Lane'], str):
-                # Ambil lane utama saja (sebelum koma)
-                filled_lanes.append(info['Lane'].split(',')[0].strip())
+                # Ambil lane utama saja (Gold Layer biasanya sudah bersih, tapi jaga-jaga)
+                primary_lane = info['Lane'].split(',')[0].strip()
+                filled_lanes.append(primary_lane)
         
-        standard_lanes = ['Exp Lane', 'Gold Lane', 'Mid Lane', 'Roam', 'Jungle']
+        standard_lanes = ['Exp Lane', 'Gold Lane', 'Mid Lane', 'Roam', 'Jungler']
+        # Sesuaikan dengan nama lane di dataset Anda (Jungle vs Jungler)
+        
         missing = [l for l in standard_lanes if l not in filled_lanes]
         return missing
 
     def recommend_dynamic_ban(self, my_team, enemy_team, banned_heroes):
         """
-        Memberikan rekomendasi BAN berdasarkan:
-        1. Meta Ban Rate (Wajib Ban)
-        2. Counter fatal bagi hero yang sudah kita pick.
+        Rekomendasi BAN:
+        1. Meta Ban (Hero yang sering diban global)
+        2. Contextual Ban (Hero yang meng-counter tim kita)
         """
         if self.df_stats.empty: return []
         
@@ -84,40 +93,49 @@ class DraftRecommender:
         
         if candidates.empty: return []
 
-        # 1. Base Score: Seberapa sering hero ini di-ban di publik (Indikator Meta/OP)
+        # --- LOGIC SKOR BAN ---
+        
+        # 1. Base Score: Meta Ban Rate
+        # (Asumsi Ban Rate di Gold adalah float 0.0 - 1.0)
         candidates['ban_score'] = candidates['Ban Rate'] * 100 
-        candidates['reasons'] = candidates['Ban Rate'].apply(lambda x: [f"⚠️ Sering di-Ban ({x:.1%})"])
+        candidates['reasons'] = candidates['Ban Rate'].apply(lambda x: [f"⚠️ Langganan ban! ({x:.2f}%)"])
 
         # 2. Contextual Ban: Lindungi hero kita
         if my_team and not self.df_counters.empty:
             for my_hero in my_team:
-                # Cari hero yang sangat kuat melawan hero kita (Score tinggi)
-                threats = self.df_counters[(self.df_counters['Target_Name'] == my_hero) & (self.df_counters['Score'] > 7.0)]
+                # Cari musuh yang Score counternya tinggi melawan hero kita
+                threats = self.df_counters[
+                    (self.df_counters['Target_Name'] == my_hero) & 
+                    (self.df_counters['Score'] > 2.0) # Threshold counter score (sesuaikan dengan skala data counter)
+                ]
                 
                 for _, row in threats.iterrows():
                     counter_name = row['Counter_Name']
                     if counter_name in candidates['Nama Hero'].values:
                         idx = candidates.index[candidates['Nama Hero'] == counter_name][0]
                         
-                        # Tambah skor ban drastis jika ini hard counter tim kita
+                        # Tambah skor ban drastis
                         candidates.at[idx, 'ban_score'] += 80 
-                        candidates.at[idx, 'reasons'].insert(0, f"🛑 Hard Counter untuk {my_hero}")
+                        candidates.at[idx, 'reasons'].insert(0, f" Hard Counter untuk {my_hero}")
 
         # Urutkan dan Format Output
         recommendations = candidates.sort_values(by='ban_score', ascending=False).head(5)
+        
         results = []
         for _, row in recommendations.iterrows():
-            # Gabungkan alasan menjadi kalimat
-            reasons_text = " • ".join(list(dict.fromkeys(row['reasons']))[:2])
+            # Gabungkan alasan (maksimal 2 alasan unik)
+            uniq_reasons = list(dict.fromkeys(row['reasons']))[:2]
+            reasons_text = " • ".join(uniq_reasons)
             results.append({'hero': row['Nama Hero'], 'reason': reasons_text})
         
         return results
 
     def recommend_dynamic_pick(self, my_team, enemy_team, banned_heroes):
         """
-        Memberikan rekomendasi PICK yang Preskriptif:
-        - Kenapa hero ini bagus? (Counter / Meta / Synergy)
-        - Apa tugasnya? (Isi Role)
+        Rekomendasi PICK Preskriptif:
+        1. Win Rate (Meta)
+        2. Role Filling (Kebutuhan Tim)
+        3. Counter Strategy (Lawan Musuh)
         """
         if self.df_stats.empty: return []
         
@@ -126,37 +144,38 @@ class DraftRecommender:
         
         if candidates.empty: return []
 
-        # === 1. BASE SCORE (Kekuatan Statistik) ===
-        candidates['pick_score'] = candidates['Win Rate'] * 100
-        # Inisialisasi list reason
-        candidates['reasons'] = [[] for _ in range(len(candidates))]
+        # --- LOGIC SKOR PICK ---
 
-        # Tandai Meta Pick jika WR tinggi
+        # 1. BASE SCORE: Win Rate
+        candidates['pick_score'] = candidates['Win Rate'] * 100
+        candidates['reasons'] = [[] for _ in range(len(candidates))] # Init list kosong
+
+        # Tandai Meta Pick jika WR tinggi (> 54%)
         meta_mask = candidates['Win Rate'] > 0.54
         for idx in candidates[meta_mask].index:
             wr = candidates.at[idx, 'Win Rate']
-            candidates.at[idx, 'reasons'].append(f"🔥 Meta Kuat (WR {wr:.1%})")
+            candidates.at[idx, 'reasons'].append(f"🔥 Meta Kuat (WR {wr:.2f}%)")
 
-        # === 2. ROLE FILLING (Prioritas Utama) ===
+        # 2. ROLE FILLING (Prioritas Utama)
         missing_roles = self.get_team_missing_roles(my_team)
         if missing_roles:
             pattern = '|'.join(missing_roles)
-            # Cari hero yang lanenya cocok dengan yang kosong
+            # Cari hero yang lanenya cocok
             mask = candidates['Lane'].str.contains(pattern, case=False, na=False)
             
-            # Boost score besar agar role kosong terisi dulu
-            candidates.loc[mask, 'pick_score'] += 150 
+            # Boost score besar agar role kosong terisi
+            candidates.loc[mask, 'pick_score'] += 200 
             
             for idx in candidates[mask].index:
                 lane_data = candidates.at[idx, 'Lane']
-                # Cari lane spesifik mana yang diisi hero ini
-                matched_role = next((r for r in missing_roles if r in lane_data), lane_data)
-                candidates.at[idx, 'reasons'].insert(0, f"✅ Mengisi {matched_role}")
+                # Cari lane spesifik mana yang cocok
+                matched_role = next((r for r in missing_roles if r.lower() in str(lane_data).lower()), lane_data)
+                candidates.at[idx, 'reasons'].insert(0, f"Lane  {matched_role}")
 
-        # === 3. COUNTER STRATEGY (Keunggulan Taktis) ===
+        # 3. COUNTER STRATEGY (Keunggulan Taktis)
         if enemy_team and not self.df_counters.empty:
             for enemy in enemy_team:
-                # Ambil data siapa yang meng-counter musuh ini
+                # Cari siapa yang meng-counter musuh ini
                 counters = self.df_counters[self.df_counters['Target_Name'] == enemy]
                 
                 for _, row in counters.iterrows():
@@ -166,53 +185,45 @@ class DraftRecommender:
                     if c_name in candidates['Nama Hero'].values:
                         idx = candidates.index[candidates['Nama Hero'] == c_name][0]
                         
-                        # Penilaian Counter
-                        if score >= 8.0:
-                            candidates.at[idx, 'pick_score'] += 60 # Boost Besar
+                        # Logika Scoring Counter (Sesuaikan threshold dengan data Anda)
+                        # Misal: Score > 1.5 itu counter, > 3.0 itu hard counter
+                        if score >= 3.0:
+                            candidates.at[idx, 'pick_score'] += 60
                             candidates.at[idx, 'reasons'].append(f"⚔️ Hard Counter {enemy}")
-                        elif score >= 5.0:
-                            candidates.at[idx, 'pick_score'] += 25 # Boost Sedang
+                        elif score >= 1.2:
+                            candidates.at[idx, 'pick_score'] += 25
                             candidates.at[idx, 'reasons'].append(f"🛡️ Counter {enemy}")
 
-        # === 4. SAFETY CHECK (Hindari di-counter musuh) ===
+        # 4. SAFETY CHECK (Jangan pick hero yang sudah dicounter musuh)
         if enemy_team and not self.df_counters.empty:
             for enemy in enemy_team:
-                # Siapa yang meng-counter hero kandidat ini?
+                # Apakah musuh ini adalah counter bagi kandidat kita?
                 threats = self.df_counters[self.df_counters['Counter_Name'] == enemy]
                 
                 for _, row in threats.iterrows():
-                    t_name = row['Target_Name']
+                    t_name = row['Target_Name'] # Hero kita yang terancam
                     if t_name in candidates['Nama Hero'].values:
                         idx = candidates.index[candidates['Nama Hero'] == t_name][0]
                         
-                        # Kurangi skor agar tidak merekomendasikan hero yang bakal kalah lane
-                        candidates.at[idx, 'pick_score'] -= 40
+                        # Penalty
+                        candidates.at[idx, 'pick_score'] -= 50
                         candidates.at[idx, 'reasons'].append(f"⚠️ Lemah lawan {enemy}")
 
         # === FINAL FORMATTING ===
         recommendations = candidates.sort_values(by='pick_score', ascending=False).head(5)
         results = []
         
+        priority_order = ["✅", "⚔️", "🛡️", "🔥", "⚠️"]
+        
         for _, row in recommendations.iterrows():
-            # Bersihkan duplikat reason dan urutkan
-            unique_reasons = []
-            seen = set()
-            
-            # Prioritas urutan tampilan: Role -> Counter -> Meta -> Warning
-            priority_order = ["✅", "⚔️", "🛡️", "🔥", "⚠️"]
-            
-            # Sort alasan berdasarkan prioritas ikon
             raw_reasons = row['reasons']
+            # Sort ikon biar rapi
             sorted_reasons = sorted(raw_reasons, key=lambda x: next((i for i, k in enumerate(priority_order) if k in x), 99))
-
-            for r in sorted_reasons:
-                if r not in seen:
-                    unique_reasons.append(r)
-                    seen.add(r)
             
-            # Gabungkan menjadi string deskriptif
-            # Contoh output: "✅ Mengisi Jungler • ⚔️ Hard Counter Fanny • 🔥 Meta Kuat (WR 55%)"
-            final_reason_str = " \n".join(unique_reasons[:3]) # Max 3 poin utama
+            # Hapus duplikat
+            unique_reasons = list(dict.fromkeys(sorted_reasons))
+            
+            final_reason_str = " \n".join(unique_reasons[:3]) # Ambil max 3 poin
             
             results.append({
                 'hero': row['Nama Hero'], 

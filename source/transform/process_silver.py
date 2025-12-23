@@ -12,7 +12,6 @@ from source.utils.helper_silver import calculate_avg_counter_score
 
 BUCKET_NAME = "mlbb-lakehouse"
 
-# --- FUNGSI PEMBERSIH SUPER (Fix Problem Kamu) ---
 def ensure_list(val):
     """
     Memaksa input menjadi list python standar [].
@@ -103,55 +102,55 @@ def transform_explode_draft(df_matches):
     return pd.DataFrame(exploded_rows)
 
 def transform_calculate_scores(df_matches, df_counter):
-   """
-   TABLE 1: Menghitung skor counter terhadap tim lawan
-   """
-   print('--LOGIC: Hitung skor counter')
-   
-   counter_dict = {}
-   if df_counter is not None:
-      for hero, counter, score in zip(df_counter['hero_name_normalized'], df_counter['counter_name_normalized'], df_counter['score']):
-         # paksa string & lowercase saat bikin kamus
-        #  h = str(hero).strip().lower()
-        #  c = str(counter).strip().lower()
-        #  counter_dict[(h, c)] = score
-         
-         counter_dict[(hero, counter)] = score
-         
-   match_counter_scores = []
-   
-   # hitung skor per match
-   for idx, row in df_matches.iterrows():
-      match_id = idx + 1
-      left_heroes = row.get('left_picks_normalized', [])
-      right_heroes = row.get('right_picks_normalized', [])
-      
-      # validasi tipe data list
-      if not isinstance(left_heroes, (list, np.ndarray)): left_heroes = []
-      if not isinstance(right_heroes, (list, np.ndarray)): right_heroes = []
+    """
+    TABLE 1: Menghitung skor counter terhadap tim lawan
+    """
+    print('--LOGIC: Hitung skor counter')
+    
+    counter_dict = {}
+    if df_counter is not None:
+        for hero, counter, score in zip(df_counter['hero_name_normalized'], df_counter['counter_name_normalized'], df_counter['score']):
+            # paksa string & lowercase saat bikin kamus
+            #  h = str(hero).strip().lower()
+            #  c = str(counter).strip().lower()
+            #  counter_dict[(h, c)] = score
+        
+            counter_dict[(hero, counter)] = score
+        
+    match_counter_scores = []
+    
+    # hitung skor per match
+    for idx, row in df_matches.iterrows():
+        match_id = idx + 1
+        left_heroes = row.get('left_picks_normalized', [])
+        right_heroes = row.get('right_picks_normalized', [])
+        
+        # validasi tipe data list
+        if not isinstance(left_heroes, (list, np.ndarray)): left_heroes = []
+        if not isinstance(right_heroes, (list, np.ndarray)): right_heroes = []
 
-      # skor tim kiri (vs Kanan)
-      for hero_raw, hero_clean in zip(left_heroes, left_heroes):
-         score = calculate_avg_counter_score(hero_clean, right_heroes, counter_dict)
-         
-         match_counter_scores.append({
+        # skor tim kiri (vs Kanan)
+        for hero_raw, hero_clean in zip(left_heroes, left_heroes):
+            score = calculate_avg_counter_score(hero_clean, right_heroes, counter_dict)
+        
+        match_counter_scores.append({
             'match_id': match_id, 
             'team_side': 'left', 
             'hero_name_normalized': hero_raw, 
             'counter_score': score
-         })
-         
-      # skor tim kanan (vs Kiri)
-      for hero_raw, hero_clean in zip(right_heroes, right_heroes):
-         score = calculate_avg_counter_score(hero_clean, left_heroes, counter_dict)
-         match_counter_scores.append({
+        })
+        
+    # skor tim kanan (vs Kiri)
+    for hero_raw, hero_clean in zip(right_heroes, right_heroes):
+        score = calculate_avg_counter_score(hero_clean, left_heroes, counter_dict)
+        match_counter_scores.append({
             'match_id': match_id, 
             'team_side': 'right', 
             'hero_name_normalized': hero_raw, 
             'counter_score': score
-         })
+        })
 
-   return pd.DataFrame(match_counter_scores)
+    return pd.DataFrame(match_counter_scores)
 
 def transform_enrich_draft(df_draft, df_stats, df_meta, df_scores):
     print("--LOGIC: Merge semua data sources")
