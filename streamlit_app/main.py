@@ -312,7 +312,7 @@ if st.session_state.draft_stage == 'ban':
     st.markdown("---")
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        if st.button("✅ SELESAI BAN & LANJUT KE PICK", type="primary", use_container_width=True):
+        if st.button("SELESAI BAN & LANJUT KE DRAFT PICK", type="primary", use_container_width=True):
             finish_ban_phase()
 
 # ==============================================================================

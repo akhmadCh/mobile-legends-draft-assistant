@@ -162,7 +162,7 @@ def process_mpl_matches():
 
 # --- EXECUTION BLOCK ---
 if __name__ == "__main__":
-    print("🚀 Memulai Pipeline Bronze Layer...")
+    print("--- PIPELINE BRONZE LAYER ---")
     
     try:
         process_stats_sql()
