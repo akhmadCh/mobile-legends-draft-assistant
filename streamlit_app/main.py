@@ -1,241 +1,128 @@
 import streamlit as st
 import sys
 import os
-import re 
-import pandas as pd
+import time
 
-# --- SETUP PATH & IMPORT ---
+# --- 1. SETUP PATH SYSTEM ---
+# Agar bisa mengimpor modul dari folder 'source'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from source.ml.predictor import DraftPredictor
+
 from source.ml.recommender import DraftRecommender
+# Opsional: Import Predictor jika sudah siap
+try:
+    from source.ml.predictor import DraftPredictor
+except ImportError:
+    DraftPredictor = None
 
-# --- CONFIG ---
-st.set_page_config(page_title="MLBB Draft Strategist", layout="wide", page_icon="🛡️")
+# --- 2. KONFIGURASI HALAMAN & CSS KEREN ---
+st.set_page_config(
+    page_title="MLBB Draft Assistant",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- STYLING (CSS) ---
+# CSS Custom untuk Tampilan "Gaming"
 st.markdown("""
 <style>
-
-/* ===== GLOBAL THEME ===== */
-html, body, [class*="css"] {
-    background: radial-gradient(circle at top, #0b1a2a, #05070d);
-    color: #e5e7eb;
-    font-family: 'Segoe UI', sans-serif;
-}
-
-/* ===== TITLE ===== */
-.big-title {
-    font-size: 44px;
-    font-weight: 900;
-    text-align: center;
-    margin: 12px 0 28px 0;
-    color: #f5c77a;
-    text-shadow: 0 0 14px rgba(245,199,122,0.45);
-}
-
-/* ===== SECTION ===== */
-.section-header {
-    text-align: center;
-    font-size: 22px;
-    font-weight: 800;
-    margin: 22px 0 14px 0;
-    letter-spacing: 1px;
-    color: #cbd5e1;
-}
-
-/* ===== TEAM HEADER ===== */
-.blue-header, .red-header {
-    text-align: center;
-    font-size: 20px;
-    font-weight: 900;
-    padding: 12px;
-    border-radius: 12px;
-    margin-bottom: 16px;
-}
-
-.blue-header {
-    background: linear-gradient(135deg, #1e3a8a, #2563eb);
-    box-shadow: 0 0 18px rgba(59,130,246,0.6);
-}
-
-.red-header {
-    background: linear-gradient(135deg, #7f1d1d, #dc2626);
-    box-shadow: 0 0 18px rgba(239,68,68,0.6);
-}
-
-/* ===== SELECTBOX SLOT ===== */
-div[data-baseweb="select"] > div {
-    min-height: 54px;
-    background: linear-gradient(180deg, #020617, #020617);
-    border-radius: 12px;
-    border: 1px solid #334155;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.9);
-}
-
-div[data-baseweb="select"] span {
-    font-size: 17px;
-    font-weight: 700;
-    color: #e5e7eb;
-}
-
-/* ===== TURN INDICATOR ===== */
-.turn-box {
-    padding: 14px;
-    border-radius: 14px;
-    text-align: center;
-    font-size: 18px;
-    font-weight: 900;
-    margin-bottom: 14px;
-    color: #fde68a;
-    background: rgba(253,224,71,0.08);
-    border: 2px solid #fde68a;
-    box-shadow: 0 0 22px rgba(253,224,71,0.7);
-    animation: glow 1.4s infinite alternate;
-}
-
-@keyframes glow {
-    from { box-shadow: 0 0 10px rgba(253,224,71,0.4); }
-    to { box-shadow: 0 0 22px rgba(253,224,71,0.9); }
-}
-
-/* ===== BAN TAG ===== */
-.ban-tag {
-    display: inline-block;
-    padding: 6px 12px;
-    margin: 3px;
-    background: #020617;
-    border: 1px solid #475569;
-    border-radius: 8px;
-    font-size: 14px;
-    color: #e5e7eb;
-}
-
-/* ===== RECOMMENDATION CARD ===== */
-.rec-card {
-    background: linear-gradient(180deg, #020617, #020617);
-    padding: 16px;
-    border-radius: 16px;
-    margin-bottom: 14px;
-    border-left: 4px solid #22c55e;
-    box-shadow: 0 0 18px rgba(34,197,94,0.25);
-}
-
-.rec-hero-name {
-    font-size: 20px;
-    font-weight: 900;
-    color: #f8fafc;
-    margin-bottom: 6px;
-}
-
-.rec-reason {
-    font-size: 14px;
-    color: #cbd5e1;
-    line-height: 1.5;
-}
-
+    /* Background Gelap Elegan */
+    .stApp {
+        background-color: #0e1117;
+        color: #e0e0e0;
+    }
+    
+    /* Header Judul */
+    .main-title {
+        font-size: 3rem;
+        font-weight: 800;
+        background: -webkit-linear-gradient(#Fcd34d, #F59e0b);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-bottom: 10px;
+        text-shadow: 0px 0px 10px rgba(245, 158, 11, 0.3);
+    }
+    
+    /* Card Rekomendasi */
+    .rec-card {
+        background-color: #1f2937;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
+    }
+    .rec-card:hover {
+        transform: scale(1.02);
+    }
+    .rec-hero {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #10b981;
+    }
+    .rec-reason {
+        font-size: 0.9rem;
+        color: #9ca3af;
+        margin-top: 5px;
+        white-space: pre-line; /* Agar enter terbaca */
+    }
+    
+    /* Indikator Giliran */
+    .turn-active {
+        border: 2px solid #3b82f6;
+        background-color: rgba(59, 130, 246, 0.1);
+        border-radius: 10px;
+        padding: 10px;
+        animation: pulse 2s infinite;
+        text-align: center;
+        font-weight: bold;
+        color: #60a5fa;
+    }
+    
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
 </style>
 """, unsafe_allow_html=True)
 
-
-# --- LOAD RESOURCES & BUILD HERO REGISTRY ---
+# --- 3. LOAD RESOURCES (CACHED) ---
 @st.cache_resource
-def load_resources():
-    pred = DraftPredictor()
+def load_system():
+    print("--- Loading System Resources ---")
+    
+    # 1. Load Recommender (Membaca Parquet Gold)
     rec = DraftRecommender()
     
-    # --- HERO REGISTRY SYSTEM ---
-    registry = {}
-
-    # 1. PERBAIKAN: Normalisasi Agresif (Membersihkan Sampah Data)
-    # Mengubah "Angela 2024 V2" -> "angela", supaya cocok dengan "01_Angela" -> "angela"
-    def normalize_key(name):
-        s = str(name).lower()
-        s = s.replace('&', 'and')
-        # Hapus tahun (2020-2029) dan teks versi (v1, v2, rev)
-        s = re.sub(r'202\d', '', s)
-        s = re.sub(r'\bv\d+\b', '', s)
-        # Hapus semua karakter SELAIN huruf (hapus angka, titik, spasi, dll)
-        s = re.sub(r'[^a-z]', '', s) 
-        return s
-
-    # 2. PERBAIKAN: Prettify Lebih Bersih
-    # Supaya jika yang terambil "Angela 2024 V2", tampilannya tetap "Angela"
-    def prettify_name(raw_name):
-        s = str(raw_name).strip()
-        # Hapus angka awalan (01_, 1.)
-        s = re.sub(r'^[\d\s._-]+', '', s)
-        # Hapus tahun dan versi dari Tampilan Layar
-        s = re.sub(r'202\d', '', s)
-        s = re.sub(r'v\d+', '', s, flags=re.IGNORECASE)
-        # Rapikan spasi
-        s = s.replace('_', ' ').replace('.', ' ').replace('-', ' ')
-        s = re.sub(r'\s+', ' ', s)
-        return s.title().strip()
-
-    # A. LOAD DARI MODEL AI
-    for col in pred.feature_names:
-        if "Hero_" in col:
-            parts = col.split("_")
-            try:
-                if "Hero" in parts:
-                    idx = parts.index("Hero")
-                    raw_model_name = "_".join(parts[idx+1:])
-                    
-                    key = normalize_key(raw_model_name)
-                    display = prettify_name(raw_model_name)
-                    
-                    if key not in registry:
-                        registry[key] = {
-                            'display': display,
-                            'model': raw_model_name,
-                            'stats': None
-                        }
-            except: continue
-
-    # B. LOAD DARI STATISTIK
-    if not rec.df_stats.empty and 'Nama Hero' in rec.df_stats.columns:
-        for raw_stats_name in rec.df_stats['Nama Hero'].unique():
-            # Dengan normalisasi baru, "Angela 2024 V2" akan menjadi "angela"
-            # Sehingga dia akan MATCH dengan data yang sudah ada dari Model AI
-            key = normalize_key(raw_stats_name)
-            
-            if key in registry:
-                # Update data stats-nya saja, jangan buat entry baru
-                registry[key]['stats'] = raw_stats_name
-            else:
-                # Jika hero benar-benar baru (belum ada di model)
-                registry[key] = {
-                    'display': prettify_name(raw_stats_name),
-                    'model': None,
-                    'stats': raw_stats_name
-                }
-
-    # 3. PERBAIKAN FINAL: Gunakan set() untuk Hapus Duplikat Mutlak
-    # Ini memastikan tidak ada string nama yang muncul 2x di dropdown
-    display_names = sorted(list(set([val['display'] for val in registry.values()])))
+    # 2. Load Predictor (Opsional)
+    pred = DraftPredictor() if DraftPredictor else None
     
-    display_map = {val['display']: val for val in registry.values()}
-    
-    return pred, rec, display_names, display_map
+    # 3. Ambil Daftar Hero dari Data Statistik Recommender
+    # Ini menjadi "Single Source of Truth" untuk nama hero di Dropdown
+    if not rec.df_stats.empty:
+        hero_list = sorted(rec.df_stats['Nama Hero'].unique().tolist())
+    else:
+        hero_list = [] # Fallback jika data kosong
+        
+    return rec, pred, hero_list
 
+# Inisialisasi
 try:
-    predictor, recommender, all_heroes, hero_map = load_resources()     
+    recommender, predictor, all_heroes = load_system()
 except Exception as e:
     st.error(f"Gagal memuat sistem: {e}")
     st.stop()
 
-# --- SESSION STATE ---
-if 'draft_stage' not in st.session_state: st.session_state.draft_stage = 'ban' # ban / pick
+# --- 4. SESSION STATE MANAGEMENT ---
+# Menyimpan status draft agar tidak hilang saat refresh
+if 'draft_stage' not in st.session_state: st.session_state.draft_stage = 'ban' 
 if 'blue_bans' not in st.session_state: st.session_state.blue_bans = [None]*5
 if 'red_bans' not in st.session_state: st.session_state.red_bans = [None]*5
 if 'blue_picks' not in st.session_state: st.session_state.blue_picks = [None]*5
 if 'red_picks' not in st.session_state: st.session_state.red_picks = [None]*5
 
-# --- HELPER FUNCTIONS ---
-def get_unavailable_display_names():
-    """Mengambil semua hero (nama display) yang sudah dipakai."""
-    return [x for x in st.session_state.blue_bans + st.session_state.red_bans + st.session_state.blue_picks + st.session_state.red_picks if x is not None]
-
+# Fungsi Reset
 def reset_draft():
     st.session_state.draft_stage = 'ban'
     st.session_state.blue_bans = [None]*5
@@ -244,200 +131,224 @@ def reset_draft():
     st.session_state.red_picks = [None]*5
     st.rerun()
 
-def finish_ban_phase():
-    st.session_state.draft_stage = 'pick'
-    st.rerun()
-
-# --- SIDEBAR PENGATURAN ---
+# --- 5. SIDEBAR ---
 with st.sidebar:
-    st.header("⚙️ Konfigurasi")
-    first_pick_choice = st.radio("Siapa First Pick?", ["Tim Biru (Saya)", "Tim Merah (Musuh)"])
+    st.header("⚙️ Pengaturan")
+    first_pick = st.radio("First Pick:", ["Tim Saya (Blue)", "Musuh (Red)"])
+    
     st.divider()
-    if st.button("🔄 Reset Draft (Mulai Ulang)", type="primary", use_container_width=True):
+    
+    # Tombol Reset
+    if st.button("🔄 Reset Draft", use_container_width=True):
         reset_draft()
-    st.info("Tombol Reset akan mengembalikan ke Fase Ban.")
+        
+    st.info("💡 **Tips:** Sistem menggunakan data historis dari Gold Layer untuk memberikan rekomendasi yang preskriptif.")
 
-# --- LOGIKA URUTAN PICK ---
-if "Biru" in first_pick_choice:
-    PICK_ORDER = [('Blue', 0), ('Red', 0), ('Red', 1), ('Blue', 1), ('Blue', 2), ('Red', 2), ('Red', 3), ('Blue', 3), ('Blue', 4), ('Red', 4)]
-else:
-    PICK_ORDER = [('Red', 0), ('Blue', 0), ('Blue', 1), ('Red', 1), ('Red', 2), ('Blue', 2), ('Blue', 3), ('Red', 3), ('Red', 4), ('Blue', 4)]
+# --- 6. JUDUL UTAMA ---
+st.markdown("<div class='main-title'>🛡️ MLBB Draft Assistant</div>", unsafe_allow_html=True)
 
-current_turn = None
-for team, idx in PICK_ORDER:
-    if team == 'Blue':
-        if st.session_state.blue_picks[idx] is None:
-            current_turn = (team, idx); break
-    else:
-        if st.session_state.red_picks[idx] is None:
-            current_turn = (team, idx); break
-
-# --- MAIN LAYOUT ---
-st.markdown("<div class='big-title'>🛡️ MLBB Draft Assistant</div>", unsafe_allow_html=True)
-
-# Helper untuk filter dropdown
-def get_options(current_val):
-    unavailable = get_unavailable_display_names()
-    return [h for h in all_heroes if h not in unavailable or h == current_val]
+# Helper: Filter hero yang sudah dipilih agar tidak muncul lagi di dropdown
+def get_available_heroes(current_val=None):
+    used =  st.session_state.blue_bans + st.session_state.red_bans + \
+            st.session_state.blue_picks + st.session_state.red_picks
+    
+    # Filter 'None' dan buat set agar pencarian cepat
+    used_set = set([x for x in used if x is not None])
+    
+    # Kembalikan list hero yang belum dipakai, ATAU hero yang sedang dipilih di slot ini
+    return [h for h in all_heroes if h not in used_set or h == current_val]
 
 # ==============================================================================
-# TAHAP 1: PHASE BANNING
+# PHASE 1: BANNING
 # ==============================================================================
 if st.session_state.draft_stage == 'ban':
-    st.markdown("<div class='section-header'>🚫 TAHAP 1: BANNING HERO</div>", unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("<div class='blue-header'>BAN TIM BIRU (SAYA)</div>", unsafe_allow_html=True)
-        for i in range(5):
-            val = st.session_state.blue_bans[i]
-            opts = get_options(val)
-            sel = st.selectbox(f"Ban Hero {i+1}", ["-"] + opts, index=opts.index(val)+1 if val in opts else 0, key=f"ban_blue_{i}")
-            if sel != "-" and sel != val:
-                st.session_state.blue_bans[i] = sel; st.rerun()
-            elif sel == "-" and val is not None:
-                st.session_state.blue_bans[i] = None; st.rerun()
-
-    with col2:
-        st.markdown("<div class='red-header'>BAN TIM MERAH (MUSUH)</div>", unsafe_allow_html=True)
-        for i in range(5):
-            val = st.session_state.red_bans[i]
-            opts = get_options(val)
-            sel = st.selectbox(f"Ban Hero {i+1}", ["-"] + opts, index=opts.index(val)+1 if val in opts else 0, key=f"ban_red_{i}")
-            if sel != "-" and sel != val:
-                st.session_state.red_bans[i] = sel; st.rerun()
-            elif sel == "-" and val is not None:
-                st.session_state.red_bans[i] = None; st.rerun()
-
-    st.markdown("---")
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        if st.button("SELESAI BAN & LANJUT KE DRAFT PICK", type="primary", use_container_width=True):
-            finish_ban_phase()
-
-# ==============================================================================
-# TAHAP 2: PHASE PICKING
-# ==============================================================================
-elif st.session_state.draft_stage == 'pick':
-    # Ringkasan Ban
-    with st.expander("👁️ Lihat Daftar Banned Hero", expanded=False):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**Banned by Blue:** " + ", ".join([f"`{b}`" for b in st.session_state.blue_bans if b]))
-        with c2:
-            st.markdown("**Banned by Red:** " + ", ".join([f"`{b}`" for b in st.session_state.red_bans if b]))
+    st.markdown("### 🚫 PHASE 1: BANNED HEROES")
     
-    st.markdown("<div class='section-header'>⚔️ TAHAP 2: DRAFT PICK</div>", unsafe_allow_html=True)
-    col_blue, col_mid, col_red = st.columns([1.2, 1.5, 1.2])
-
-    # --- TIM BIRU ---
-    with col_blue:
-        st.markdown("<div class='blue-header'>TIM BIRU (SAYA)</div>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    
+    # --- KOLOM KIRI: BAN SAYA ---
+    with col1:
+        st.info("🟦 Ban Tim Saya")
         for i in range(5):
-            val = st.session_state.blue_picks[i]
-            is_active = (current_turn == ('Blue', i))
+            curr_val = st.session_state.blue_bans[i]
+            opts = ["-"] + get_available_heroes(curr_val)
             
-            container = st.container()
-            if is_active: container.markdown(f"<div class='turn-box' style='border-color: #42A5F5; background-color: rgba(66, 165, 245, 0.1);'>GILIRAN SAYA</div>", unsafe_allow_html=True)
+            # Logic index agar tidak error jika value berubah
+            idx = opts.index(curr_val) if curr_val in opts else 0
             
-            # Logic Lock
-            disabled = False
-            if current_turn:
-                if val is None and not is_active: disabled = True # Future slot locked
+            sel = st.selectbox(f"Ban Blue {i+1}", opts, index=idx, key=f"ban_b_{i}")
             
-            sel = container.selectbox(f"Pick Blue {i+1}", ["-"] + get_options(val), index=get_options(val).index(val)+1 if val in get_options(val) else 0, disabled=disabled, key=f"pick_blue_{i}", label_visibility="collapsed")
-            if sel != "-" and sel != val:
-                st.session_state.blue_picks[i] = sel; st.rerun()
-            elif sel == "-" and val is not None:
-                st.session_state.blue_picks[i] = None; st.rerun()
-            st.write("")
+            if sel != "-" and sel != curr_val:
+                st.session_state.blue_bans[i] = sel
+                st.rerun()
+            elif sel == "-" and curr_val is not None:
+                st.session_state.blue_bans[i] = None
+                st.rerun()
 
-    # --- TIM MERAH ---
-    with col_red:
-        st.markdown("<div class='red-header'>TIM MERAH (MUSUH)</div>", unsafe_allow_html=True)
-        for i in range(5):
-            val = st.session_state.red_picks[i]
-            is_active = (current_turn == ('Red', i))
-            
-            container = st.container()
-            if is_active: container.markdown(f"<div class='turn-box' style='border-color: #EF5350; background-color: rgba(239, 83, 80, 0.1);'>GILIRAN MUSUH</div>", unsafe_allow_html=True)
-            
-            disabled = False
-            if current_turn:
-                if val is None and not is_active: disabled = True
-            
-            sel = container.selectbox(f"Pick Red {i+1}", ["-"] + get_options(val), index=get_options(val).index(val)+1 if val in get_options(val) else 0, disabled=disabled, key=f"pick_red_{i}", label_visibility="collapsed")
-            if sel != "-" and sel != val:
-                st.session_state.red_picks[i] = sel; st.rerun()
-            elif sel == "-" and val is not None:
-                st.session_state.red_picks[i] = None; st.rerun()
-            st.write("")
-
-    # --- AI ANALYSIS ---
-    with col_mid:
-        st.write("")
-        # 1. PREDIKSI (Pakai Model Name: "01_Miya")
-        clean_blue = [x for x in st.session_state.blue_picks if x]
-        clean_red = [x for x in st.session_state.red_picks if x]
+    # --- KOLOM TENGAH: REKOMENDASI ---
+    with col2:
+        st.write("#### 💡 Saran Ban")
         
-        if clean_blue and clean_red:
-            # Terjemahkan: Tampilan "Miya" -> Model "01_Miya"
-            # Jika tidak ada di model (None), gunakan nama displaynya (fallback)
-            model_blue = [hero_map[h]['model'] if hero_map[h]['model'] else h for h in clean_blue]
-            model_red = [hero_map[h]['model'] if hero_map[h]['model'] else h for h in clean_red]
-            
-            win_prob = float(predictor.predict_win_rate(model_blue, model_red))
-            
-            st.metric("PELUANG MENANG SAYA", f"{win_prob:.1%}")
-            st.progress(win_prob)
-            if win_prob > 0.55: st.success("Posisi Unggul! ✅")
-            elif win_prob < 0.45: st.error("Posisi Tertinggal! ⚠️")
-            else: st.info("Posisi Seimbang ⚖️")
+        # Ambil daftar yang sudah di-ban
+        current_bans = [x for x in st.session_state.blue_bans + st.session_state.red_bans if x]
         
+        # Minta Rekomendasi
+        recs = recommender.recommend_dynamic_ban([], [], current_bans)
+        
+        if recs:
+            for r in recs:
+                st.markdown(f"""
+                <div class="rec-card">
+                    <div class="rec-hero" style="color: #ef4444;">{r['hero']}</div>
+                    <div class="rec-reason">{r['reason']}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.warning("Data belum cukup untuk memberikan rekomendasi.")
+            
         st.divider()
+        if st.button("✅ Selesai Ban & Lanjut Pick", type="primary", use_container_width=True):
+            st.session_state.draft_stage = 'pick'
+            st.rerun()
 
-        # 2. REKOMENDASI (Pakai Stats Name jika ada, atau Model Name)
-        if current_turn and current_turn[0] == 'Blue':
-            st.subheader("💡 Rekomendasi AI")
+    # --- KOLOM KANAN: BAN MUSUH ---
+    with col3:
+        st.error("🟥 Ban Musuh")
+        for i in range(5):
+            curr_val = st.session_state.red_bans[i]
+            opts = ["-"] + get_available_heroes(curr_val)
+            idx = opts.index(curr_val) if curr_val in opts else 0
             
-            # Persiapkan Data untuk Recommender
-            # Kita gunakan nama statistik ("Miya") jika ada, agar cocok dengan CSV counter
-            # Jika tidak, pakai model name
+            sel = st.selectbox(f"Ban Red {i+1}", opts, index=idx, key=f"ban_r_{i}")
             
-            def get_rec_name(display_name):
-                entry = hero_map.get(display_name)
-                if not entry: return display_name
-                return entry['stats'] if entry['stats'] else entry['model']
+            if sel != "-" and sel != curr_val:
+                st.session_state.red_bans[i] = sel
+                st.rerun()
+
+# ==============================================================================
+# PHASE 2: PICKING
+# ==============================================================================
+else:
+    # Tampilkan Ringkasan Ban Kecil di Atas
+    bans_str = ", ".join([b for b in st.session_state.blue_bans + st.session_state.red_bans if b])
+    st.caption(f"⛔ **Banned:** {bans_str}")
+    
+    st.markdown("### ⚔️ PHASE 2: DRAFT PICK")
+    
+    # Tentukan Giliran (Snake Draft Logic)
+    # Urutan: Blue, Red, Red, Blue, Blue, Red, Red, Blue, Blue, Red (Jika Blue First Pick)
+    if "Saya" in first_pick:
+        pick_order = [('B',0), ('R',0), ('R',1), ('B',1), ('B',2), ('R',2), ('R',3), ('B',3), ('B',4), ('R',4)]
+    else:
+        pick_order = [('R',0), ('B',0), ('B',1), ('R',1), ('R',2), ('B',2), ('B',3), ('R',3), ('R',4), ('B',4)]
+        
+    current_turn_team = None
+    current_turn_idx = None
+    
+    # Cari slot kosong pertama sesuai urutan
+    for team, idx in pick_order:
+        if team == 'B':
+            if st.session_state.blue_picks[idx] is None:
+                current_turn_team, current_turn_idx = 'Blue', idx
+                break
+        else:
+            if st.session_state.red_picks[idx] is None:
+                current_turn_team, current_turn_idx = 'Red', idx
+                break
+
+    col_blue, col_center, col_red = st.columns([1, 1.5, 1])
+
+    # --- TIM BIRU (KIRI) ---
+    with col_blue:
+        st.markdown("<h4 style='color:#3b82f6; text-align:center;'>🟦 TIM SAYA</h4>", unsafe_allow_html=True)
+        for i in range(5):
+            active = (current_turn_team == 'Blue' and current_turn_idx == i)
             
-            my_picks_rec = [get_rec_name(h) for h in clean_blue]
-            en_picks_rec = [get_rec_name(h) for h in clean_red]
-            bans_rec = [get_rec_name(h) for h in st.session_state.blue_bans + st.session_state.red_bans if h]
+            # Styling container jika aktif
+            if active:
+                st.markdown("<div class='turn-active'>GILIRAN ANDA</div>", unsafe_allow_html=True)
             
-            recs = recommender.recommend_dynamic_pick(my_picks_rec, en_picks_rec, bans_rec)
+            curr_val = st.session_state.blue_picks[i]
+            opts = ["-"] + get_available_heroes(curr_val)
+            idx = opts.index(curr_val) if curr_val in opts else 0
+            
+            # Selectbox
+            sel = st.selectbox(f"S{i+1}", opts, index=idx, key=f"pick_b_{i}", label_visibility="collapsed")
+            
+            # Jarak antar slot
+            st.write("") 
+            
+            if sel != "-" and sel != curr_val:
+                st.session_state.blue_picks[i] = sel
+                st.rerun()
+
+    # --- TIM MERAH (KANAN) ---
+    with col_red:
+        st.markdown("<h4 style='color:#ef4444; text-align:center;'>🟥 TIM MUSUH</h4>", unsafe_allow_html=True)
+        for i in range(5):
+            active = (current_turn_team == 'Red' and current_turn_idx == i)
+            
+            if active:
+                st.markdown("<div class='turn-active' style='border-color:#ef4444; color:#ef4444; background-color:rgba(239,68,68,0.1);'>GILIRAN MUSUH</div>", unsafe_allow_html=True)
+                
+            curr_val = st.session_state.red_picks[i]
+            opts = ["-"] + get_available_heroes(curr_val)
+            idx = opts.index(curr_val) if curr_val in opts else 0
+            
+            sel = st.selectbox(f"M{i+1}", opts, index=idx, key=f"pick_r_{i}", label_visibility="collapsed")
+            
+            st.write("")
+            
+            if sel != "-" and sel != curr_val:
+                st.session_state.red_picks[i] = sel
+                st.rerun()
+
+    # --- TENGAH: ANALISIS & REKOMENDASI ---
+    with col_center:
+        # A. PREDIKSI WIN RATE (Jika model ada)
+        my_team = [x for x in st.session_state.blue_picks if x]
+        en_team = [x for x in st.session_state.red_picks if x]
+        
+        if predictor and my_team and en_team:
+            try:
+                # Asumsi predictor menerima list nama hero
+                win_prob = predictor.predict_win_rate(my_team, en_team)
+                
+                st.metric("PELUANG MENANG", f"{win_prob:.1%}")
+                st.progress(win_prob)
+                
+                if win_prob > 0.6: st.success("Draft Superior! Pertahankan.")
+                elif win_prob < 0.4: st.error("Draft Tertinggal! Cari Counter.")
+                else: st.info("Draft Seimbang.")
+                
+            except Exception as e:
+                # Silent fail agar aplikasi tidak crash jika model error
+                pass 
+                
+        st.divider()
+        
+        # B. REKOMENDASI PICK
+        if current_turn_team == 'Blue':
+            st.subheader("💡 Rekomendasi Pick")
+            
+            banned = [x for x in st.session_state.blue_bans + st.session_state.red_bans if x]
+            
+            # PANGGIL LOGIKA CERDAS DARI FILE RECOMMENDER.PY
+            recs = recommender.recommend_dynamic_pick(my_team, en_team, banned)
             
             if recs:
-                for r in recs[:4]:
-                    # r['hero'] adalah nama mentah dari CSV. Kita harus cari nama Display-nya.
-                    # Cari di registry: entri mana yang punya 'stats' == r['hero']
-                    found_display = r['hero'] # Default fallback
-                    
-                    # Scanning registry (karena kita butuh reverse lookup dari 'stats')
-                    for d_name, d_data in hero_map.items():
-                        # Cek kecocokan stats name ATAU model name (jika stats kosong)
-                        if d_data['stats'] == r['hero'] or d_data['model'] == r['hero']:
-                            found_display = d_name
-                            break
-                    
+                for r in recs:
                     st.markdown(f"""
                     <div class="rec-card">
-                        <div class="rec-hero-name">{found_display}</div>
+                        <div class="rec-hero">{r['hero']}</div>
                         <div class="rec-reason">{r['reason']}</div>
                     </div>
                     """, unsafe_allow_html=True)
             else:
-                st.caption("Data history belum cukup.")
-        elif current_turn:
-            st.info("Menunggu Musuh Pick...")
+                st.info("Belum ada rekomendasi spesifik.")
+                
+        elif current_turn_team == 'Red':
+            st.info("Menunggu musuh memilih hero...")
         else:
-            st.success("Draft Selesai!")
+            st.success("🎉 DRAFT SELESAI!")
             st.balloons()

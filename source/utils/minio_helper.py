@@ -4,7 +4,7 @@ import pandas as pd
 import os 
 
 MINIO_CONFIG = {
-   'endpoint': os.getenv("MINIO_ENDPOINT", "minio:9000"),
+   'endpoint': os.getenv("MINIO_ENDPOINT", "localhost:9000"),
    'access_key': os.getenv("MINIO_ACCESS_KEY", "minioadmin"),
    'secret_key': os.getenv("MINIO_SECRET_KEY", "minioadmin"),
    'secure': False
@@ -19,7 +19,6 @@ MINIO_CONFIG = {
 
 def get_minio_client():
    # Debugging (Opsional): Print endpoint yang sedang dipakai
-   print(f"DEBUG: Connecting to MinIO at {MINIO_CONFIG['endpoint']}")
    return Minio(**MINIO_CONFIG)
 
 def upload_df_to_minio(df: pd.DataFrame, bucket_name: str, object_name: str, file_format='csv'):
