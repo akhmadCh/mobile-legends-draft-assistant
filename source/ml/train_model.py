@@ -12,7 +12,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from source.utils.minio_helper import read_df_from_minio
 
 BUCKET_NAME = "mlbb-lakehouse"
-MODEL_FILENAME = "model_draft_mlbb.pkl"
+MODEL_FILENAME = "model_baseline_draft_mlbb.pkl"
 
 def clean_feature_names(df):
     """Membersihkan nama kolom agar diterima oleh XGBoost (menghapus karakter unik)"""

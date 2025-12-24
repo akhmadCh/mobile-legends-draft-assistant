@@ -22,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS Custom untuk Tampilan "Gaming"
+# CSS Custom untuk Tampilan "Gaming" + SCROLLBAR CUSTOM
 st.markdown("""
 <style>
     /* Background Gelap Elegan */
@@ -47,24 +47,26 @@ st.markdown("""
     .rec-card {
         background-color: #1f2937;
         border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 10px;
+        padding: 12px; /* Sedikit dikecilkan paddingnya biar muat banyak */
+        margin-bottom: 8px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         transition: transform 0.2s;
     }
     .rec-card:hover {
-        transform: scale(1.02);
+        transform: scale(1.01);
+        background-color: #2d3748;
     }
     .rec-hero {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         font-weight: bold;
-        color: #10b981;
+        color: #f3f4f6;
     }
     .rec-reason {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         color: #9ca3af;
-        margin-top: 5px;
+        margin-top: 4px;
         white-space: pre-line; /* Agar enter terbaca */
+        line-height: 1.4;
     }
     
     /* Indikator Giliran */
@@ -83,6 +85,27 @@ st.markdown("""
         0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
         70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
         100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
+
+    /* --- CUSTOM SCROLLBAR (Biar Gak Putih Polos) --- */
+    /* Width */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    /* Track */
+    ::-webkit-scrollbar-track {
+        background: #111827; 
+        border-radius: 4px;
+    }
+    /* Handle */
+    ::-webkit-scrollbar-thumb {
+        background: #4b5563; 
+        border-radius: 4px;
+    }
+    /* Handle on hover */
+    ::-webkit-scrollbar-thumb:hover {
+        background: #6b7280; 
     }
 </style>
 """, unsafe_allow_html=True)
@@ -185,9 +208,9 @@ if st.session_state.draft_stage == 'ban':
                 st.session_state.blue_bans[i] = None
                 st.rerun()
 
-    # --- KOLOM TENGAH: REKOMENDASI ---
+    # --- KOLOM TENGAH: REKOMENDASI (SCROLLABLE) ---
     with col2:
-        st.write("#### 💡 Saran Ban")
+        st.write("#### 💡 Saran Ban (Top 10)")
         
         # Ambil daftar yang sudah di-ban
         current_bans = [x for x in st.session_state.blue_bans + st.session_state.red_bans if x]
@@ -196,13 +219,15 @@ if st.session_state.draft_stage == 'ban':
         recs = recommender.recommend_dynamic_ban([], [], current_bans)
         
         if recs:
-            for r in recs:
-                st.markdown(f"""
-                <div class="rec-card">
-                    <div class="rec-hero" style="color: #ef4444;">{r['hero']}</div>
-                    <div class="rec-reason">{r['reason']}</div>
-                </div>
-                """, unsafe_allow_html=True)
+            # [BARU] Container Scrollable untuk Ban (Tinggi 400px)
+            with st.container(height=400, border=True):
+                for r in recs:
+                    st.markdown(f"""
+                    <div class="rec-card"">
+                        <div class="rec-hero" style="color: #fca5a5;">{r['hero']}</div>
+                        <div class="rec-reason">{r['reason']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
         else:
             st.warning("Data belum cukup untuk memberikan rekomendasi.")
             
@@ -236,7 +261,6 @@ else:
     st.markdown("### ⚔️ PHASE 2: DRAFT PICK")
     
     # Tentukan Giliran (Snake Draft Logic)
-    # Urutan: Blue, Red, Red, Blue, Blue, Red, Red, Blue, Blue, Red (Jika Blue First Pick)
     if "Saya" in first_pick:
         pick_order = [('B',0), ('R',0), ('R',1), ('B',1), ('B',2), ('R',2), ('R',3), ('B',3), ('B',4), ('R',4)]
     else:
@@ -303,7 +327,7 @@ else:
                 st.session_state.red_picks[i] = sel
                 st.rerun()
 
-    # --- TENGAH: ANALISIS & REKOMENDASI ---
+    # --- TENGAH: ANALISIS & REKOMENDASI (SCROLLABLE) ---
     with col_center:
         # A. PREDIKSI WIN RATE (Jika model ada)
         my_team = [x for x in st.session_state.blue_picks if x]
@@ -322,28 +346,29 @@ else:
                 else: st.info("Draft Seimbang.")
                 
             except Exception as e:
-                # Silent fail agar aplikasi tidak crash jika model error
                 pass 
                 
         st.divider()
         
         # B. REKOMENDASI PICK
         if current_turn_team == 'Blue':
-            st.subheader("💡 Rekomendasi Pick")
+            st.subheader("💡 Rekomendasi Pick (Top 25)")
             
             banned = [x for x in st.session_state.blue_bans + st.session_state.red_bans if x]
             
-            # PANGGIL LOGIKA CERDAS DARI FILE RECOMMENDER.PY
+            # PANGGIL LOGIKA CERDAS
             recs = recommender.recommend_dynamic_pick(my_team, en_team, banned)
             
             if recs:
-                for r in recs:
-                    st.markdown(f"""
-                    <div class="rec-card">
-                        <div class="rec-hero">{r['hero']}</div>
-                        <div class="rec-reason">{r['reason']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # [BARU] Container Scrollable untuk Pick (Tinggi 500px biar muat banyak)
+                with st.container(height=500, border=True):
+                    for r in recs:
+                        st.markdown(f"""
+                        <div class="rec-card">
+                            <div class="rec-hero">{r['hero']}</div>
+                            <div class="rec-reason">{r['reason']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
             else:
                 st.info("Belum ada rekomendasi spesifik.")
                 
