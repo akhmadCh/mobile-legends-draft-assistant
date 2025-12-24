@@ -6,7 +6,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from source.utils.minio_helper import read_df_from_minio, upload_df_to_minio
 
-BUCKET_NAME = "mlbb-lakehouse"
+BUCKET_NAME = "mlbb-lake"
 
 def create_ml_features(df_silver_enriched):
     """

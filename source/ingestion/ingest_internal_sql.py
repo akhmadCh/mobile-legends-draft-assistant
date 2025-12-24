@@ -26,7 +26,7 @@ def ingest_sql_data():
       print(f"--Berhasil load {len(df)} row dari SQL.")
       
       # Upload ke MinIO
-      upload_df_to_minio(df, "mlbb-lakehouse", MINIO_DEST)
+      upload_df_to_minio(df, "mlbb-lake", MINIO_DEST)
       print("--DONE: Sukses upload ke MinIO.")
       
    except Exception as e:

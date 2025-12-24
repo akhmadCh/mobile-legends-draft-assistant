@@ -12,7 +12,7 @@ from source.utils.global_helper import get_timestamp
 from source.utils.helper_bronze import normalize_hero_name, clean_percentage, get_tier_score, parse_hero_list
 
 # --- KONFIGURASI BUCKET ---
-BUCKET_NAME = "mlbb-lakehouse"
+BUCKET_NAME = "mlbb-lake"
 
 def process_stats_sql():
     print("\n[1/4] Proses Hero Stats (SQL Source)")

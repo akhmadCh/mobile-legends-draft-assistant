@@ -88,7 +88,7 @@ def scrape_hero_stats():
       print("\n--- Preview Data ---")
       print(df[['Nama Hero', 'Win Rate', 'Pick Rate', 'Ban Rate', 'Role', 'Lane', 'Speciality', 'Rank Filter']].head(3).to_string(index=False))
       
-      upload_df_to_minio(df, "mlbb-lakehouse", MINIO_PATH)
+      upload_df_to_minio(df, "mlbb-lake", MINIO_PATH)
       print(f"\n--SUCCESS, {len(df)} data save to MinIO in '{MINIO_PATH}'")
    else:
       print("--FAILED, no data found.")

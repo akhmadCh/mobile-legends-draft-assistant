@@ -10,7 +10,7 @@ from xgboost import XGBClassifier
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from source.utils.minio_helper import read_df_from_minio
 
-BUCKET_NAME = "mlbb-lakehouse"
+BUCKET_NAME = "mlbb-lake"
 # Pastikan file ini sesuai dengan output terakhir process_gold2.py
 INPUT_FILE = "gold/gold_training_dataset.parquet" 
 MODEL_FILENAME = "model_draft_mlbb.pkl"
