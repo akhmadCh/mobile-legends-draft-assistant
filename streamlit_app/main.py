@@ -101,7 +101,7 @@ def load_system():
     # 3. Ambil Daftar Hero dari Data Statistik Recommender
     # Ini menjadi "Single Source of Truth" untuk nama hero di Dropdown
     if not rec.df_stats.empty:
-        hero_list = sorted(rec.df_stats['Nama Hero'].unique().tolist())
+        hero_list = sorted(rec.df_stats['hero_name'].unique().tolist())
     else:
         hero_list = [] # Fallback jika data kosong
         
