@@ -7,7 +7,7 @@ import numpy as np
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from source.utils.minio_helper import read_df_from_minio
 
-BUCKET_NAME = "mlbb-lakehouse"
+BUCKET_NAME = "mlbb-lake"
 
 class DraftRecommender:
     def __init__(self):

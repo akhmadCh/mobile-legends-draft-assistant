@@ -11,7 +11,7 @@ from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from source.utils.minio_helper import read_df_from_minio
 
-BUCKET_NAME = "mlbb-lakehouse"
+BUCKET_NAME = "mlbb-lake"
 INPUT_FILE = "gold/gold_training_dataset.parquet" # Pastikan ini output dari pipeline Gold 2 yang baru
 
 def train_baseline_models():

@@ -5,7 +5,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from source.utils.minio_helper import read_df_from_minio
 
-BUCKET_NAME = "mlbb-lakehouse"
+BUCKET_NAME = "mlbb-lake"
 
 def check_data_types():
     print("--- 🔍 DIAGNOSA DATA ---")

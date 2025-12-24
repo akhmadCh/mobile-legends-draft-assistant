@@ -10,7 +10,7 @@ from source.utils.minio_helper import read_df_from_minio, upload_df_to_minio
 from source.utils.global_helper import get_timestamp
 
 # --- KONFIGURASI BUCKET ---
-BUCKET_NAME = "mlbb-lakehouse"
+BUCKET_NAME = "mlbb-lake"
 
 def transform_gold_pick_features(df_silver):
     """

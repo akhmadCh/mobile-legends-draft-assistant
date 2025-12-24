@@ -133,7 +133,7 @@ def run_scraper():
             # minio path, but flexible filename
             filename = f"mpl_{region.lower()}_s16.csv"
             # Simpan ke bucket raw/mpl_matches
-            upload_df_to_minio(df, "mlbb-lakehouse", f"raw/mpl_matches/{filename}")
+            upload_df_to_minio(df, "mlbb-lake", f"raw/mpl_matches/{filename}")
             print(f"\n--SUCCESS, {len(df)} data save to MinIO in 'raw/mpl_matches/{filename}'")
          else:
             print("--FAILED, no data found for {region}.")

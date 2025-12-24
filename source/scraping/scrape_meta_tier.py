@@ -55,7 +55,7 @@ def scrape_meta_tier():
       print("\n--- Preview Data Meta ---")
       print(df[['Nama Hero', 'Tier', 'Score']].head(3).to_string(index=False))
       
-      upload_df_to_minio(df, "mlbb-lakehouse", MINIO_PATH)
+      upload_df_to_minio(df, "mlbb-lake", MINIO_PATH)
       print(f"\n--SUCCESS, {len(df)} data save to MinIO in '{MINIO_PATH}'")
    else:
       print("--FAILED, no data found.")

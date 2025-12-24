@@ -105,7 +105,7 @@ def scrape_counters():
       print(df.head())
       
       # Simpan ke MinIO Raw Layer
-      upload_df_to_minio(df, "mlbb-lakehouse", "raw/counter/data_counter.csv")
+      upload_df_to_minio(df, "mlbb-lake", "raw/counter/data_counter.csv")
       
       print(f"\n--SUCCESS, {len(df)} data save to MinIO in 'raw/counter/data_counter.csv'")
    else:

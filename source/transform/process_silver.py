@@ -10,7 +10,7 @@ from source.utils.minio_helper import read_df_from_minio, upload_df_to_minio
 from source.utils.global_helper import get_timestamp
 from source.utils.helper_silver import calculate_avg_counter_score
 
-BUCKET_NAME = "mlbb-lakehouse"
+BUCKET_NAME = "mlbb-lake"
 
 def ensure_list(val):
     """

@@ -20,7 +20,7 @@ def create_mock_sql():
    try:
       # Baca hasil scraping dari raw/temp
       # df = pd.read_csv(MINIO_PATH)
-      df = read_df_from_minio("mlbb-lakehouse", MINIO_PATH)
+      df = read_df_from_minio("mlbb-lake", MINIO_PATH)
       
       # filter kolom
       target_columns = ['Nama Hero', 'Win Rate', 'Pick Rate', 'Ban Rate', 'Role', 'Lane', 'Speciality']
