@@ -115,20 +115,28 @@ st.markdown("""
 def load_system():
     print("--- Loading System Resources ---")
     
-    # 1. Load Recommender (Membaca Parquet Gold)
-    rec = DraftRecommender()
-    
-    # 2. Load Predictor (Opsional)
-    pred = DraftPredictor() if DraftPredictor else None
-    
-    # 3. Ambil Daftar Hero dari Data Statistik Recommender
-    # Ini menjadi "Single Source of Truth" untuk nama hero di Dropdown
-    if not rec.df_stats.empty:
-        hero_list = sorted(rec.df_stats['hero_name'].unique().tolist())
-    else:
-        hero_list = [] # Fallback jika data kosong
+    try:
+        # 1. Load Recommender
+        rec = DraftRecommender()
         
-    return rec, pred, hero_list
+        # DEBUG: Cek apakah data berhasil dimuat
+        if rec.df_stats is None or rec.df_stats.empty:
+            st.error("Data Stats Kosong! Cek file parquet di folder data/.")
+            print("ERROR: rec.df_stats is Empty")
+            hero_list = []
+        else:
+            print(f"SUCCESS: Loaded {len(rec.df_stats)} rows of stats.")
+            hero_list = sorted(rec.df_stats['hero_name'].unique().tolist())
+
+        # 2. Load Predictor (Opsional)
+        pred = DraftPredictor() if DraftPredictor else None
+        
+        return rec, pred, hero_list
+        
+    except Exception as e:
+        st.error(f"Terjadi Error saat Load System: {e}")
+        print(f"CRITICAL ERROR: {e}")
+        return None, None, []
 
 # Inisialisasi
 try:
