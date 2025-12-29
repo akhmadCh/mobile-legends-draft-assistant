@@ -1,78 +1,117 @@
 import pickle
 import pandas as pd
+import numpy as np
 import os
 import sys
 
+# Path helper
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(BASE_DIR)
+
+from source.utils.minio_helper import read_df_from_minio
+
+BUCKET_NAME = "mlbb-lake"
+MODEL_PATH = os.path.join(BASE_DIR, "model_draft_mlbb.pkl")
+
+GOLD_LEADERBOARD = "gold/hero_leaderboard.parquet"
+GOLD_COUNTER = "gold/hero_counter_lookup.parquet"
+
+
 class DraftPredictor:
     def __init__(self):
-        # Path relatif dari file ini (source/ml/predictor.py) ke root project
-        BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        
-        # Nama file model harus SAMA dengan yang ada di train_model.py
-        self.model_path = os.path.join(BASE_DIR, "model_draft_mlbb.pkl")
-        
-        # Load Model & Feature Names (Sekarang jadi satu paket dalam pickle)
-        if not os.path.exists(self.model_path):
-            raise FileNotFoundError(f"--ERROR:Model tidak ditemukan di {self.model_path}. Jalankan source/ml/train_model.py dulu!")
+        if not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError("Model V3 tidak ditemukan. Jalankan train model dulu.")
 
-        print(f"Loading model from: {self.model_path}")
-        with open(self.model_path, "rb") as f:
+        with open(MODEL_PATH, "rb") as f:
             artifact = pickle.load(f)
             self.model = artifact['model']
             self.feature_names = artifact['model_columns']
 
-    def predict_win_rate(self, team_blue_heroes, team_red_heroes):
-        """
-        Input: List string, e.g. ['Ling', 'Nana'] vs ['Tigreal', 'Layla']
-        Output: Float probabilitas kemenangan Tim Biru (0.0 - 1.0)
-        """
-        # 1. Buat DataFrame kosong dengan kolom yang sesuai urutan training
-        #    (XGBoost sangat sensitif terhadap urutan kolom)
-        input_data = {col: 0 for col in self.feature_names}
-        
-        # 2. Isi data Hero Tim Biru (T1)
-        for hero in team_blue_heroes:
-            # Bersihkan nama hero jika perlu (sesuai logic clean_feature_names di training)
-            # Tapi biasanya prefix sudah cukup unik.
-            col_name = f"T1_Hero_{hero}"
-            # Coba cari exact match dulu
-            if col_name in input_data:
-                input_data[col_name] = 1
-            else:
-                # Fallback: Coba match parsial jika ada karakter aneh yang hilang
-                # (Opsional, tergantung seberapa bersih data input)
-                pass
-                
-        # 3. Isi data Hero Tim Merah (T2)
-        for hero in team_red_heroes:
-            col_name = f"T2_Hero_{hero}"
-            if col_name in input_data:
-                input_data[col_name] = 1
-        
-        # 4. Convert ke DataFrame (1 baris)
-        df_input = pd.DataFrame([input_data])
-        
-        # Pastikan urutan kolom sama persis dengan self.feature_names
-        df_input = df_input[self.feature_names]
-        
-        # 5. Prediksi Probabilitas
-        # classes_[1] adalah probabilitas kelas 1 (Tim Biru Menang)
-        try:
-            probability = self.model.predict_proba(df_input)[0][1]
-        except Exception as e:
-            print(f"Error predicting: {e}")
-            probability = 0.5 # Default jika error
-            
-        return probability
+        # Load Gold Data
+        self.hero_stats = read_df_from_minio(BUCKET_NAME, GOLD_LEADERBOARD, file_format="parquet")
+        self.counter_lookup = read_df_from_minio(BUCKET_NAME, GOLD_COUNTER, file_format="parquet")
 
-# --- Block Test Manual ---
+        if self.hero_stats is None or self.counter_lookup is None:
+            raise RuntimeError("Gold data tidak lengkap")
+
+    def _normalize(self, name):
+        return str(name).lower().replace(" ", "").replace("-", "")
+
+    def _get_hero_row(self, hero):
+        key = self._normalize(hero)
+        row = self.hero_stats[self.hero_stats['hero_name_normalized'] == key]
+        return row.iloc[0] if not row.empty else None
+
+    def _calc_team_stats(self, heroes):
+        win_rates = []
+        meta_scores = []
+        roles = []
+
+        for h in heroes:
+            row = self._get_hero_row(h)
+            if row is not None:
+                win_rates.append(row['win_rate'])
+                meta_scores.append(row['tier_score'])
+                roles.append(row['role'])
+
+        avg_win_rate = np.mean(win_rates) if win_rates else 0
+        avg_meta = np.mean(meta_scores) if meta_scores else 0
+
+        has_front = any(r in ['Tank', 'Fighter', 'Support'] for r in roles)
+        has_damage = any(r in ['Marksman', 'Mage', 'Assassin'] for r in roles)
+        role_balance = 1 if (has_front and has_damage) else 0
+
+        return avg_win_rate, avg_meta, role_balance
+
+    def _calc_counter_score(self, team, enemy):
+        score = 0
+        for h in team:
+            for e in enemy:
+                h_n = self._normalize(h)
+                e_n = self._normalize(e)
+                row = self.counter_lookup[
+                    (self.counter_lookup['Counter_Name'] == h_n) &
+                    (self.counter_lookup['Target_Name'] == e_n)
+                ]
+                if not row.empty:
+                    score += row['Score'].iloc[0]
+        return score
+
+    def predict_win_rate(self, team_left, team_right):
+        # if len(team_left) != 5 or len(team_right) != 5:
+        #     raise ValueError("Setiap tim harus terdiri dari 5 hero")
+
+        left_wr, left_meta, left_role = self._calc_team_stats(team_left)
+        right_wr, right_meta, right_role = self._calc_team_stats(team_right)
+
+        counter_left = self._calc_counter_score(team_left, team_right)
+        counter_right = self._calc_counter_score(team_right, team_left)
+
+        input_data = {
+            'diff_team_strength': 0.0,  # default netral
+            'diff_counter': counter_left - counter_right,
+            'diff_meta': left_meta - right_meta,
+            'diff_role_balance': left_role - right_role,
+            'diff_win_rate': left_wr - right_wr,
+            'avg_meta_score_team_left': left_meta,
+            'avg_meta_score_team_right': right_meta,
+            'is_role_balanced_left': left_role,
+            'is_role_balanced_right': right_role
+        }
+
+        df_input = pd.DataFrame([input_data])
+        df_input = df_input[self.feature_names]
+
+        prob = self.model.predict_proba(df_input)[0][1]
+        return prob
+
+
+# TEST MANUAL
 if __name__ == "__main__":
-    # Contoh cara pakai langsung
     predictor = DraftPredictor()
-    
-    # Ganti dengan nama hero yang ada di dataset Anda
-    blue = ['Ling', 'Nana', 'Tigreal', 'Layla', 'Saber']
-    red  = ['Fanny', 'Gusion', 'Franco', 'Miya', 'Chou']
-    
-    win_rate = predictor.predict_win_rate(blue, red)
-    print(f"\nPrediksi Kemenangan Tim Biru: {win_rate*100:.2f}%")
+
+    team_left = ['Ling', 'Nana', 'Tigreal', 'Layla', 'Saber']
+    team_right = ['Fanny', 'Gusion', 'Franco', 'Miya', 'Chou']
+
+    prob = predictor.predict(team_left, team_right)
+    print(f"Probabilitas Menang Tim Kiri: {prob*100:.2f}%")

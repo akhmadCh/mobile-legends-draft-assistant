@@ -43,7 +43,7 @@ with DAG(
 
    task_process_gold = BashOperator(
       task_id='update_gold',
-      bash_command=f'cd {PROJECT_ROOT} && python -m source.transform.process_gold'
+      bash_command=f'cd {PROJECT_ROOT} && python -m source.transform.process_gold3'
    )
 
    # --- STEP 3: MACHINE LEARNING ---
@@ -51,7 +51,7 @@ with DAG(
    
    task_train_model = BashOperator(
       task_id='retrain_xgboost_model',
-      bash_command=f'cd {PROJECT_ROOT} && python -m source.ml.train_model'
+      bash_command=f'cd {PROJECT_ROOT} && python -m source.ml.train_model3'
    )
 
    # --- ALUR FLOW ---
