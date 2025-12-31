@@ -25,7 +25,7 @@ def train_enhanced_predictor():
         print("--ERROR: Data not found. Jalankan process_gold3.py dulu.")
         return
     
-    print(f"✅ Data Loaded: {len(df)} matches.")
+    print(f"Data Loaded: {len(df)} matches.")
 
     # 2. Fitur Engineering
     target_col = 'is_winner_team_left'
