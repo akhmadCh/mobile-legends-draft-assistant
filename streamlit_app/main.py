@@ -218,7 +218,7 @@ if st.session_state.draft_stage == 'ban':
 
     # --- KOLOM TENGAH: REKOMENDASI (SCROLLABLE) ---
     with col2:
-        st.write("#### 💡 Saran Ban (Top 10)")
+        st.write("#### 💡 Saran Ban (Top 25)")
         
         # Ambil daftar yang sudah di-ban
         current_bans = [x for x in st.session_state.blue_bans + st.session_state.red_bans if x]
