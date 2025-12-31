@@ -151,7 +151,7 @@ class DraftRecommender:
                         candidates.at[idx, 'reasons'].insert(0, f"🛑 Counter berat {my_hero}")
 
         # Ambil Top 5
-        recommendations = candidates.sort_values(by='ban_score', ascending=False).head(10)
+        recommendations = candidates.sort_values(by='ban_score', ascending=False).head(25)
         
         results = []
         for _, row in recommendations.iterrows():
