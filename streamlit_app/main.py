@@ -107,6 +107,15 @@ st.markdown("""
     ::-webkit-scrollbar-thumb:hover {
         background: #6b7280; 
     }
+    
+    /* Box Simpan Hasil */
+    .save-box {
+        background-color: #1f2937;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #374151;
+        margin-top: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -165,7 +174,8 @@ def reset_draft():
 # --- 5. SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Pengaturan")
-    first_pick = st.radio("First Pick:", ["Tim Saya (Blue)", "Musuh (Red)"])
+    # Pilihan siapa yang First Pick (Draft Order), bukan posisi Tim
+    first_pick = st.radio("First Pick (Giliran Pertama):", ["Tim Saya (Blue)", "Musuh (Red)"])
     
     st.divider()
     
@@ -173,7 +183,12 @@ with st.sidebar:
     if st.button("🔄 Reset Draft", use_container_width=True):
         reset_draft()
         
-    st.info("💡 **Tips:** Sistem menggunakan data historis dari Gold Layer untuk memberikan rekomendasi yang preskriptif.")
+    st.info("💡 **Info:** Posisi Anda selalu di **Tim Biru (Kiri)**.")
+    
+    # Status Model History
+    st.markdown("---")
+    if hasattr(recommender, 'df_history') and recommender.df_history is not None:
+        st.caption(f"📚 Data History User: **{len(recommender.df_history)} Match**")
 
 # --- 6. JUDUL UTAMA ---
 st.markdown("<div class='main-title'>🛡️ MLBB Draft Assistant</div>", unsafe_allow_html=True)
@@ -197,7 +212,7 @@ if st.session_state.draft_stage == 'ban':
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     
-    # --- KOLOM KIRI: BAN SAYA ---
+    # --- KOLOM KIRI: BAN SAYA (BLUE) ---
     with col1:
         st.info("🟦 Ban Tim Saya")
         for i in range(5):
@@ -227,7 +242,7 @@ if st.session_state.draft_stage == 'ban':
         recs = recommender.recommend_dynamic_ban([], [], current_bans)
         
         if recs:
-            # [BARU] Container Scrollable untuk Ban (Tinggi 400px)
+            # Container Scrollable untuk Ban (Tinggi 400px)
             with st.container(height=400, border=True):
                 for r in recs:
                     st.markdown(f"""
@@ -244,7 +259,7 @@ if st.session_state.draft_stage == 'ban':
             st.session_state.draft_stage = 'pick'
             st.rerun()
 
-    # --- KOLOM KANAN: BAN MUSUH ---
+    # --- KOLOM KANAN: BAN MUSUH (RED) ---
     with col3:
         st.error("🟥 Ban Musuh")
         for i in range(5):
@@ -269,7 +284,9 @@ else:
     st.markdown("### ⚔️ PHASE 2: DRAFT PICK")
     
     # Tentukan Giliran (Snake Draft Logic)
-    if "Saya" in first_pick:
+    # Jika "Tim Saya (Blue)" First Pick -> Blue mulai
+    # Jika "Musuh (Red)" First Pick -> Red mulai
+    if "Tim Saya" in first_pick:
         pick_order = [('B',0), ('R',0), ('R',1), ('B',1), ('B',2), ('R',2), ('R',3), ('B',3), ('B',4), ('R',4)]
     else:
         pick_order = [('R',0), ('B',0), ('B',1), ('R',1), ('R',2), ('B',2), ('B',3), ('R',3), ('R',4), ('B',4)]
@@ -290,7 +307,7 @@ else:
 
     col_blue, col_center, col_red = st.columns([1, 1.5, 1])
 
-    # --- TIM BIRU (KIRI) ---
+    # --- TIM BIRU (KIRI - TIM SAYA) ---
     with col_blue:
         st.markdown("<h4 style='color:#3b82f6; text-align:center;'>🟦 TIM SAYA</h4>", unsafe_allow_html=True)
         for i in range(5):
@@ -314,7 +331,7 @@ else:
                 st.session_state.blue_picks[i] = sel
                 st.rerun()
 
-    # --- TIM MERAH (KANAN) ---
+    # --- TIM MERAH (KANAN - MUSUH) ---
     with col_red:
         st.markdown("<h4 style='color:#ef4444; text-align:center;'>🟥 TIM MUSUH</h4>", unsafe_allow_html=True)
         for i in range(5):
@@ -358,7 +375,7 @@ else:
                 
         st.divider()
         
-        # B. REKOMENDASI PICK
+        # B. LOGIKA GILIRAN / SELESAI
         if current_turn_team == 'Blue':
             st.subheader("💡 Rekomendasi Pick (Top 25)")
             
@@ -368,7 +385,7 @@ else:
             recs = recommender.recommend_dynamic_pick(my_team, en_team, banned)
             
             if recs:
-                # [BARU] Container Scrollable untuk Pick (Tinggi 500px biar muat banyak)
+                # Container Scrollable untuk Pick (Tinggi 500px biar muat banyak)
                 with st.container(height=500, border=True):
                     for r in recs:
                         st.markdown(f"""
@@ -382,6 +399,51 @@ else:
                 
         elif current_turn_team == 'Red':
             st.info("Menunggu musuh memilih hero...")
+        
         else:
+            # ==================================================================
+            # BAGIAN BARU: DRAFT SELESAI & SIMPAN HASIL
+            # ==================================================================
             st.success("🎉 DRAFT SELESAI!")
             st.balloons()
+            
+            st.markdown("""
+            <div class='save-box'>
+                <h4 style="text-align: center; color: #4da6ff; margin-bottom: 5px;">💾 Simpan Hasil Pertandingan</h4>
+                <p style="text-align: center; color: #9ca3af; font-size: 0.85rem; margin-bottom: 15px;">
+                    Simpan hasil pertandingan ini untuk melatih AI agar lebih memahami gaya bermain Anda.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Form Input Hasil (Lebih Sederhana)
+            with st.form("save_match_form"):
+                # Layout kolom untuk form
+                c1, c2 = st.columns([2, 1])
+                
+                with c1:
+                    st.write("**Hasil Akhir Pertandingan:**")
+                    match_result = st.radio("Status:", ["🏆 Win (Menang)", "❌ Loss (Kalah)"], horizontal=True, label_visibility="collapsed")
+                
+                with c2:
+                    st.write("") # Spacer vertical
+                    submit_btn = st.form_submit_button("Simpan & Reset", type="primary", use_container_width=True)
+                
+                if submit_btn:
+                    # Logic Sederhana: Tim Saya Selalu Blue
+                    final_my_team = [x for x in st.session_state.blue_picks if x]
+                    final_enemy_team = [x for x in st.session_state.red_picks if x]
+                    
+                    # Konversi status ke string simple "Win"/"Loss"
+                    status_str = "Win" if "Win" in match_result else "Loss"
+                    
+                    with st.spinner("Menyimpan ke History..."):
+                        # Panggil fungsi save di recommender
+                        success = recommender.save_match_result(final_my_team, final_enemy_team, status_str)
+                    
+                    if success:
+                        st.success("✅ Data tersimpan! Mereset draft...")
+                        time.sleep(1.5)
+                        reset_draft()
+                    else:
+                        st.error("❌ Gagal menyimpan. Cek koneksi.")
