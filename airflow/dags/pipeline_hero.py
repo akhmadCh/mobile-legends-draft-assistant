@@ -70,7 +70,7 @@ with DAG(
 
    task_process_gold = BashOperator(
       task_id='process_gold_layer',
-      bash_command=f'cd {PROJECT_ROOT} && python -m source.transform.process_gold'
+      bash_command=f'cd {PROJECT_ROOT} && python -m source.transform.process_gold3'
    )
 
    # --- ALUR DEPENDENCY (FLOW) ---

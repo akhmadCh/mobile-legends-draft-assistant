@@ -138,7 +138,7 @@ def load_system():
             hero_list = sorted(rec.df_stats['hero_name'].unique().tolist())
 
         # 2. Load Predictor (Opsional)
-        pred = DraftPredictor() if DraftPredictor else None
+        pred = DraftPredictor()
         
         return rec, pred, hero_list
         
@@ -233,7 +233,7 @@ if st.session_state.draft_stage == 'ban':
 
     # --- KOLOM TENGAH: REKOMENDASI (SCROLLABLE) ---
     with col2:
-        st.write("#### 💡 Saran Ban (Top 10)")
+        st.write("#### 💡 Saran Ban (Top 25)")
         
         # Ambil daftar yang sudah di-ban
         current_bans = [x for x in st.session_state.blue_bans + st.session_state.red_bans if x]
@@ -358,6 +358,7 @@ else:
         my_team = [x for x in st.session_state.blue_picks if x]
         en_team = [x for x in st.session_state.red_picks if x]
         
+        # if predictor and len(my_team) == 5 and len(en_team) == 5:
         if predictor and my_team and en_team:
             try:
                 # Asumsi predictor menerima list nama hero
@@ -371,7 +372,7 @@ else:
                 else: st.info("Draft Seimbang.")
                 
             except Exception as e:
-                pass 
+                pass
                 
         st.divider()
         
