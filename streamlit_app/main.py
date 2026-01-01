@@ -216,8 +216,7 @@ def get_available_heroes(current_val=None):
 # --- 6. HEADER VISUAL ---
 st.markdown("""
 <div class="main-header">
-    <div class="sub-header">SYSTEM READY // ONLINE // v2.4.0</div>
-    <h1>TACTICAL DRAFT HUD</h1>
+   <h1>TACTICAL DRAFT HUD</h1>
 </div>
 """, unsafe_allow_html=True)
 
