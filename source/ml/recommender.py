@@ -411,6 +411,9 @@ class DraftRecommender:
         
         raw_avoid = user_profile.get('avoid_roles', [])
         avoid_roles = [r.lower() for r in raw_avoid] # jadi ['tank']
+        
+        # Bersihkan username input
+        current_user = str(username).strip().lower()
 
         user_recs = []
         team_recs = []
@@ -560,7 +563,17 @@ class DraftRecommender:
             
             # 2. Masukkan ke List TIM (Logika Sinergi tetap sama)
             if not self.df_synergy.empty:
-                syn_row = self.df_synergy[self.df_synergy['hero_id'] == hero_key]
+                # Cek apakah kolom username ada (untuk backward compatibility)
+                if 'username' in self.df_synergy.columns:
+                    # Filter: Hero ID sama DAN Username sama
+                    syn_row = self.df_synergy[
+                        (self.df_synergy['hero_id'] == hero_key) &
+                        (self.df_synergy['username'] == current_user)
+                    ]
+                else:
+                    # Fallback jika data lama (belum ada kolom username)
+                    syn_row = self.df_synergy[self.df_synergy['hero_id'] == hero_key]
+                
                 if not syn_row.empty:
                     syn_wr = float(syn_row.iloc[0]['synergy_wr'])
                     matches = int(syn_row.iloc[0]['matches_together'])
