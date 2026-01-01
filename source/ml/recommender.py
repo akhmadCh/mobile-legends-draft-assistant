@@ -40,22 +40,26 @@ class DraftRecommender:
             self.df_counters = read_df_from_minio(BUCKET_NAME, COUNTER_DATA_PATH, file_format='parquet')
             
             # 2. Load User Stats dari GOLD Layer
-            # Ini jauh lebih cepat karena sudah berupa summary (hero_id, total_picks, win_rate)
             self.df_user_perf = read_df_from_minio(BUCKET_NAME, GOLD_USER_STATS_PATH, file_format='parquet')
+            
+            # data sinergi
+            self.df_synergy = read_df_from_minio(BUCKET_NAME, "gold/user_history/user_team_synergy.parquet", file_format='parquet')
             
             if self.df_user_perf is None or self.df_user_perf.empty:
                 print("[INFO] User Gold data not found. New user or pipeline hasn't run.")
                 self.df_user_perf = pd.DataFrame(columns=['hero_id', 'total_picks', 'win_rate'])
             else:
                 print(f"[INFO] Loaded User Stats for {len(self.df_user_perf)} heroes from Gold.")
-                
+            
+            if self.df_synergy is None: self.df_synergy = pd.DataFrame()
+            
         else:
-            # Fallback jika MinIO mati (misal pakai CSV lokal/offline)
+            # fallback jika MinIO mati (misal pakai CSV lokal/offline)
             self.df_stats = pd.DataFrame()
             self.df_counters = pd.DataFrame()
             self.df_user_perf = pd.DataFrame()
         
-        # 3. Persiapan Data (Cleaning & Formatting)
+        # 3. (Cleaning & Formatting)
         self._prepare_data()
 
     def _normalize_name(self, name):
@@ -63,40 +67,32 @@ class DraftRecommender:
         if pd.isna(name) or name is None: return ""
         return re.sub(r'[^a-zA-Z0-9]', '', str(name)).lower()
 
-    # =========================================================================
-    # BAGIAN 1: MANAJEMEN DATA USER (WRITE RAW -> READ GOLD)
-    # =========================================================================
-
-    def save_match_result(self, my_team_list, enemy_team_list, result_status):
+    # MANAJEMEN DATA USER (WRITE RAW -> READ GOLD)
+    def save_match_result(self, my_team, enemy_team, result_status, user_hero_played):
         """
-        Menyimpan hasil match baru ke RAW Layer (CSV).
-        Nanti Airflow yang akan memprosesnya menjadi Bronze -> Silver -> Gold.
+        Menyimpan hasil match dengan format baru:
+        Menambahkan kolom 'user_hero' agar sistem tahu mana yang dimainkan user.
         """
         if not MINIO_AVAILABLE:
-            print("[ERROR] Cannot save: MinIO not available.")
+            print("[ERROR] MinIO not available.")
             return False
 
         try:
-            # 1. Konversi list hero menjadi string CSV friendly
-            # Filter None/Empty values
-            my_team_clean = [str(x) for x in my_team_list if x]
-            enemy_team_clean = [str(x) for x in enemy_team_list if x]
-
-            my_team_str = ",".join(my_team_clean)
-            enemy_team_str = ",".join(enemy_team_clean)
+            # Format list ke string
+            my_team_str = ",".join([str(x) for x in my_team if x])
+            enemy_team_str = ",".join([str(x) for x in enemy_team if x])
             
-            # 2. Buat DataFrame untuk baris data baru
             new_data = {
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 'my_team': my_team_str,
                 'enemy_team': enemy_team_str,
-                'result': result_status
+                'result': result_status,
+                'user_hero': str(user_hero_played) # <--- TAMBAHAN PENTING
             }
+            
             new_row = pd.DataFrame([new_data])
             
-            # 3. Baca RAW file lama (jika ada) untuk di-append
-            # Catatan: Untuk skala besar, append CSV di object storage tidak efisien.
-            # Tapi untuk single user/demo, cara ini (Read-Concat-Write) masih oke.
+            # Load existing, concat, save (seperti biasa)
             existing_df = read_df_from_minio(BUCKET_NAME, RAW_HISTORY_PATH, file_format='csv')
             
             if existing_df is not None and not existing_df.empty:
@@ -104,13 +100,11 @@ class DraftRecommender:
             else:
                 final_df = new_row
             
-            # 4. Upload kembali ke MinIO (Overwrite file raw lama)
             upload_df_to_minio(final_df, BUCKET_NAME, RAW_HISTORY_PATH, file_format='csv')
-            print(f"[SUCCESS] Match saved to RAW Layer: {RAW_HISTORY_PATH}")
             return True
             
         except Exception as e:
-            print(f"[ERROR] Failed to save match result: {e}")
+            print(f"[ERROR] Save failed: {e}")
             return False
 
     def get_user_hero_stats(self, hero_name):
@@ -137,10 +131,7 @@ class DraftRecommender:
         # Jika hero tidak ditemukan di stats user
         return 0, 0.0
 
-    # =========================================================================
-    # BAGIAN 2: PERSIAPAN DATA (GLOBAL & COUNTER)
-    # =========================================================================
-
+    # DATA (GLOBAL & COUNTER)
     def _prepare_data(self):
         """Merapikan data global dan counter agar siap pakai."""
         # 1. Stats Global
@@ -209,9 +200,7 @@ class DraftRecommender:
         
         return needed_roles
 
-    # =========================================================================
-    # BAGIAN 3: ALGORITMA REKOMENDASI (BAN & PICK)
-    # =========================================================================
+    # REKOMENDASI (BAN & PICK)
 
     def recommend_dynamic_ban(self, my_team, enemy_team, banned_heroes):
         """Rekomendasi Ban: Fokus pada Meta & Counter."""
@@ -280,9 +269,7 @@ class DraftRecommender:
         candidates['score_user'] = 0.0
         candidates['reasons'] = [[] for _ in range(len(candidates))]
 
-        # ---------------------------------------------------------------------
         # 1. KOMPONEN DATA EKSTERNAL (40%) - Meta & Counter
-        # ---------------------------------------------------------------------
         if 'win_rate' in candidates.columns:
             # Win rate 50% -> skor 50. 
             candidates['score_external'] = candidates['win_rate'] * 100
@@ -316,9 +303,7 @@ class DraftRecommender:
                          candidates.at[idx, 'score_external'] -= 20
                          candidates.at[idx, 'reasons'].append(f"⚠️ Lemah vs {enemy}")
 
-        # ---------------------------------------------------------------------
         # 2. KOMPONEN KEBUTUHAN TIM (30%) - Role Filling
-        # ---------------------------------------------------------------------
         if my_team:
             missing_roles = self.get_team_missing_roles(my_team)
             if missing_roles:
@@ -335,9 +320,7 @@ class DraftRecommender:
             # First pick bebas
             candidates['score_team'] = 100.0
 
-        # ---------------------------------------------------------------------
         # 3. KOMPONEN KECOCOKAN USER (30%) - Data dari Gold Layer
-        # ---------------------------------------------------------------------
         for idx, row in candidates.iterrows():
             hero_name = row['hero_name']
             
@@ -361,9 +344,7 @@ class DraftRecommender:
             
             candidates.at[idx, 'score_user'] = user_score
 
-        # ---------------------------------------------------------------------
         # HITUNG TOTAL SKOR AKHIR
-        # ---------------------------------------------------------------------
         candidates['final_score'] = (
             (candidates['score_external'] * 0.40) + 
             (candidates['score_team']     * 0.30) + 
@@ -402,17 +383,17 @@ class DraftRecommender:
     def recommend_personalized(self, my_team, enemy_team, banned_heroes, user_profile):
         """
         Menghasilkan rekomendasi Terpisah:
-        1. User Recs (Top 5) -> Fokus ke Mastery & Comfort (Alasan Personal)
-        2. Team Recs (Top 25) -> Fokus ke Meta, Counter & Synergy (Alasan Strategis)
+        1. User Recs (Top 10) -> Prioritas Comfort Hero & Mastery (Personal)
+        2. Team Recs (Top 25) -> Fokus ke Meta, Counter & Synergy (Strategis)
         """
-        # Filter hero tersedia
+        # 1. Filter hero yang tersedia
         all_unavailable = (my_team or []) + (enemy_team or []) + (banned_heroes or [])
         unavailable_keys = set([self._normalize_name(h) for h in all_unavailable if h])
         candidates = self.df_stats[~self.df_stats['join_key'].isin(unavailable_keys)].copy()
         
         if candidates.empty: return [], []
 
-        # Ambil profil user
+        # 2. Ambil data profil user
         preferred_roles = user_profile.get('main_roles', [])
         comfort_heroes = user_profile.get('comfort_heroes', [])
         avoid_roles = user_profile.get('avoid_roles', [])
@@ -423,41 +404,43 @@ class DraftRecommender:
         for idx, row in candidates.iterrows():
             hero_name = row['hero_name']
             role = str(row['role'])
+            hero_key = row['join_key'] # Key untuk lookup sinergi/counter
             
-            # --- 1. HITUNG SKOR DASAR (META) ---
-            # Base score dari Win Rate Global (0-100)
+            # --- PHASE A: HITUNG SKOR STRATEGIS (BASE) ---
+            # Skor ini murni objektif: Meta + Kebutuhan Tim + Counter
+            
+            # 1. Base Score (Meta)
             meta_score = row['win_rate'] * 100 
-            
-            # --- 2. HITUNG SKOR & ALASAN STRATEGIS (TIM) ---
             strat_score = meta_score
             strat_reasons = []
 
-            # A. Cek Meta/Tier
+            # 2. Cek Tier Meta
             if row['win_rate'] > 0.54:
-                strat_reasons.append(f"🔥 Meta (WR Global {row['win_rate']:.1f}%)")
+                strat_reasons.append(f"🔥 Meta (WR {row['win_rate']:.1f}%)")
             elif row['win_rate'] > 0.51:
                 strat_reasons.append(f"📈 Good Stats (WR {row['win_rate']:.1f}%)")
 
-            # B. Cek Kebutuhan Tim (Role Filling)
+            # 3. Cek Kebutuhan Tim (Role Filling)
             missing_roles = self.get_team_missing_roles(my_team)
             hero_lane = str(row['lane']).lower()
             is_needed = False
+            
             for needed in missing_roles:
+                # Match logic: misal "gold" ada di "gold lane"
                 if needed.split()[0].lower() in hero_lane: 
-                    strat_score += 40 # Boost besar jika dibutuhkan tim
-                    strat_reasons.insert(0, f"✅ Isi {needed}") # Taruh paling depan
+                    strat_score += 40 # Boost besar karena dibutuhkan
+                    strat_reasons.insert(0, f"✅ Isi {needed}")
                     is_needed = True
                     break
             
-            # C. Cek Counter Musuh (Hard/Soft Counter)
+            # 4. Cek Counter Musuh
             if enemy_team and not self.df_counters.empty:
                 for enemy in enemy_team:
                     if not enemy: continue
                     enemy_key = self._normalize_name(enemy)
-                    # Cek di tabel counter
                     c_row = self.df_counters[
                         (self.df_counters['target_key'] == enemy_key) & 
-                        (self.df_counters['counter_key'] == row['join_key'])
+                        (self.df_counters['counter_key'] == hero_key)
                     ]
                     if not c_row.empty:
                         score_val = float(c_row.iloc[0]['score'])
@@ -468,65 +451,111 @@ class DraftRecommender:
                             strat_score += 15
                             strat_reasons.append(f"🛡️ Counter {enemy}")
 
-            # --- 3. HITUNG SKOR & ALASAN PERSONAL (USER) ---
-            # Ambil statistik user dari Gold Layer
+            # --- PHASE B: HITUNG SKOR PERSONAL (USER) ---
+            # Skor ini subjektif: Skill User + Comfort
+            
+            # Ambil history user
             u_pick, u_wr = self.get_user_hero_stats(hero_name)
             
-            user_score = strat_score # Start from strategic score
+            # Inisialisasi skor user dari skor strategis (biar tetap objektif)
+            user_score = strat_score 
             user_reasons = []
 
-            # Logika Alasan User (Sesuai Request)
+            # hero yang pernah dipilih user dianggap "layak" jika:
+            # 1. ada di daftar comfort pick (manual)
+            # 2. atau punya history pick minimal 3x dengan WR yang tidak hancur (>45%)
+            is_comfort = hero_name in comfort_heroes
+            has_good_history = (u_pick >= 2 and u_wr > 0.45) # batas history
+            
+            is_proven = is_comfort or has_good_history # <--- INI KUNCINYA
+
+            # 1. Logika History & Skill
             if u_pick > 0:
-                if u_wr > 0.6: # Jago (>60% WR)
+                if u_wr > 0.6: # Jago
                     user_score += 50
-                    user_reasons.insert(0, f"🌟 Hero Andalan (WR {u_wr:.0%})")
-                elif u_pick >= 3: # Comfort Pick (Sering main)
+                    user_reasons.insert(0, f"🌟 Hero Andalan Kamu! (WR {u_wr:.0%})")
+                elif u_pick >= 3: # Sering Pakai
                     user_score += 30
                     user_reasons.append(f"👤 Sering dipakai ({u_pick}x) (WR {u_wr:.0%})")
-                elif u_wr < 0.4 and u_pick >= 2: # Kurang bisa
+                elif u_wr < 0.4 and u_pick >= 2: # Kurang Bisa
                     user_score -= 20
-                    user_reasons.append(f"📉 Riwayat buruk (WR {u_wr:.0%})")
+                    user_reasons.append(f"📉 Skill issue kalau pakai ({u_pick}x) (WR {u_wr:.0%})")
                 else: 
-                    user_reasons.append(f"📝 History: {u_pick} match")
+                    user_reasons.append(f"📝 Hanya dipakai {u_pick} match, WR kamu {u_wr:.0%}...")
             
-            # Cek Manual Input (Comfort Heroes)
+            # 2. Logika Comfort Pick (Manual Input)
             if hero_name in comfort_heroes:
                 user_score += 40
-                user_reasons.insert(0, "❤️ Comfort Pick (Manual)")
+                user_reasons.insert(0, "❤️ Comfort Pick")
             
-            # Cek Role Utama
+            # 3. Logika Role Utama
             is_user_role = any(r in role for r in preferred_roles)
             if is_user_role:
                 user_score += 15
-                # Opsional: tidak perlu dimunculkan di teks agar tidak penuh, 
-                # atau dimunculkan jika belum ada alasan lain.
                 if not user_reasons: user_reasons.append("🎯 Role Utama")
 
-            # --- 4. PEMISAHAN & FINALISASI ---
+            # --- PHASE C: FINALISASI REKOMENDASI ---
             
-            # Gabungkan alasan strategis ke user reason juga (karena user butuh tau kenapa hero ini bagus)
-            # Tapi batasi agar tidak kepanjangan
-            combined_user_reasons = user_reasons + strat_reasons[:2]
+            # 1. Tentukan Status: Apakah punya History Signifikan?
+            # Kita anggap signifikan jika sudah pernah dipick user (meskipun kalah)
+            has_history = (u_pick > 0) 
+            is_comfort = (hero_name in comfort_heroes)
             
-            # KATEGORI A: REKOMENDASI USER
-            # Syarat: Role cocok ATAU Comfort ATAU History Bagus (WR > 50%)
-            # Dan BUKAN Role Anti (kecuali comfort hero)
+            # Gabungkan alasan
+            combined_user_reasons = user_reasons + strat_reasons[:2] 
             is_avoid = any(r in role for r in avoid_roles)
             
-            valid_for_user = (is_user_role or (hero_name in comfort_heroes) or (u_wr > 0.5 and u_pick > 2))
+            # LOGIKA FILTER BARU (User Recs)
+            # Masukkan jika:
+            # 1. Comfort Pick
+            # 2. ATAU Punya History (Baik/Buruk) -> Agar user ingat sejarahnya
+            # 3. ATAU Sesuai Role Utama (Meskipun belum ada history)
+            # Exclusion: Tetap buang Role Anti, KECUALI dia punya history atau comfort
             
-            if valid_for_user and not (is_avoid and hero_name not in comfort_heroes):
-                user_recs.append({
-                    'hero': hero_name,
-                    'score': user_score,
-                    'reason': " • ".join(combined_user_reasons[:3]) # Ambil 3 alasan teratas
-                })
+            valid_for_user = (is_comfort or has_history or is_user_role)
             
-            # KATEGORI B: REKOMENDASI TIM
-            # Syarat: Skor Strategis Tinggi (Meta/Counter/Needed)
-            # Masukkan SEMUA yang bagus secara strategi, nanti di-sort
+            # Pengecualian Avoid Role:
+            # Jika user "Anti Assassin" TAPI dia pernah main Lancelot (has_history), 
+            # tetap tampilkan Lancelot (sebagai pengingat/saran), jangan dibuang.
+            if valid_for_user:
+                # Jika role dihindari, tapi ga punya history/comfort, baru skip
+                if is_avoid and not (is_comfort or has_history):
+                    pass 
+                else:
+                    # FORMAT ALASAN KHUSUS UNTUK BAD HISTORY
+                    # Jika history ada tapi winrate jelek, kita kasih tanda peringatan
+                    display_reason = " • ".join(combined_user_reasons[:3])
+                    
+                    if has_history and u_wr < 0.45:
+                        # Tambahkan emoji peringatan di depan
+                        display_reason = f"Waspada! {display_reason}"
+
+                    user_recs.append({
+                        'hero': hero_name,
+                        'score': user_score,
+                        'wr': u_wr,
+                        'is_comfort': is_comfort,   # Flag Comfort
+                        'has_history': has_history, # Flag History (Baik/Buruk)
+                        'reason': display_reason
+                    })
+            
+            # 2. Masukkan ke List TIM (Logika Sinergi tetap sama)
+            if not self.df_synergy.empty:
+                syn_row = self.df_synergy[self.df_synergy['hero_id'] == hero_key]
+                if not syn_row.empty:
+                    syn_wr = float(syn_row.iloc[0]['synergy_wr'])
+                    matches = int(syn_row.iloc[0]['matches_together'])
+                    
+                    if matches >= 2:
+                        if syn_wr > 0.6:
+                            strat_score += 35 
+                            strat_reasons.insert(0, f"🤝 Sinergi Tinggi (WR {syn_wr:.0%})")
+                            is_high_synergy = True
+                        elif syn_wr < 0.4:
+                            strat_score -= 15
+                            strat_reasons.append(f"⚠️ Bad Synergy (WR {syn_wr:.0%})")
+            
             if strat_score > 60 or is_needed:
-                # Tambahkan label jika ini bukan role user
                 final_strat_reasons = strat_reasons
                 if is_avoid:
                     final_strat_reasons.append("⚠️ (Bukan Role Anda)")
@@ -534,15 +563,29 @@ class DraftRecommender:
                 team_recs.append({
                     'hero': hero_name,
                     'score': strat_score,
+                    'is_high_synergy': is_high_synergy,
                     'reason': " • ".join(final_strat_reasons[:3])
                 })
 
-        # --- 5. SORTING & SLICING (Sesuai Request) ---
+        # --- PHASE D: SORTING FINAL (Updated) ---
         
         # User: Top 10
-        user_recs = sorted(user_recs, key=lambda x: x['hero'] in comfort_heroes, reverse=True)[:10]
+        # URUTAN PRIORITAS BARU:
+        # 1. Comfort Pick (Paling Atas)
+        # 2. Punya History (Baik/Buruk) -> Agar user "aware" dengan track record-nya
+        # 3. Skor Tertinggi
         
-        # Team: Top 25 (Agar user bisa scroll banyak opsi)
-        team_recs = sorted(team_recs, key=lambda x: x['score'], reverse=True)[:25]
+        user_recs = sorted(
+            user_recs, 
+            key=lambda x: (x['is_comfort'], x['has_history'], x['score']), 
+            reverse=True
+        )[:10]
+        
+        # Team: Top 25
+        team_recs = sorted(
+            team_recs, 
+            key=lambda x: (x['is_high_synergy'], x['score']), 
+            reverse=True
+        )[:25]
         
         return user_recs, team_recs

@@ -488,23 +488,27 @@ else:
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
             
             # Tabs manual using columns for cleaner look
-            t1, t2 = st.tabs(["🎯 PERSONALIZED", "🛡️ TEAM SYNERGY"])
+            t1, t2 = st.tabs(["PERSONALIZED", "TEAM SYNERGY"])
             
             with t1:
-                st.caption("Recommended based on your Role & Comfort:")
-                if recs_user:
-                    for r in recs_user:
+               st.caption("Recommended based on your Role & Comfort:")
+               if recs_user:
+                  for r in recs_user:
                         st.markdown(f"""
-                        <div class="rec-item"">
-                            <div>
-                                <div class="hero-name">{r['hero']}</div>
-                                <div class="hero-desc">{r['reason']}</div>
-                            </div>
-                            <div class="hero-score" style="color:#00f2ea;">BEST PICK</div>
+                        <div class="rec-item">
+                           <div>
+                              <div class="hero-name">{r['hero']}</div>
+                              <div class="hero-desc">{r['reason']}</div>
+                           </div>
+                           
+                           <div class="hero-score" style="color:{'red' if r['wr'] < 0.4 else '#22c55e'};">
+                              {"NOT RECOMMEND!" if r['wr'] < 0.4 else 'BEST PICK'}
+                           </div>
                         </div>
                         """, unsafe_allow_html=True)
-                else:
-                    st.info("No specific personal data match. Check Team Synergy.")
+               else:
+                  st.info("No specific personal data match. Check Team Synergy.")
+
 
             with t2:
                 st.caption("Recommended for Team Balance & Counters:")
@@ -533,22 +537,61 @@ else:
         else:
             # END GAME SAVE
             st.markdown('<div class="glass-card" style="text-align:center;">', unsafe_allow_html=True)
-            st.success("DRAFT COMPLETE")
+            st.markdown("### 💾 MATCH REPORT")
+            st.caption("Simpan data untuk meningkatkan akurasi personalisasi Anda.")
+            
             with st.form("save_match"):
-                st.write("Record Match Result:")
-                res = st.radio("Outcome", ["Victory", "Defeat"], horizontal=True)
-                if st.form_submit_button("SAVE MATCH DATA", type="primary", use_container_width=True):
-                     # Logic save here (simplified)
-                     st.toast("Match Saved! System updating...")
-                     time.sleep(1)
-                     reset_draft()
+                c1, c2 = st.columns(2)
+                
+                with c1:
+                    st.markdown("**Hasil Pertandingan:**")
+                    res = st.radio("Outcome", ["Victory (Menang)", "Defeat (Kalah)"], label_visibility="collapsed")
+                
+                with c2:
+                    st.markdown("**Hero yang ANDA Mainkan:**")
+                    # Ambil daftar hero tim kita yang sudah dipick (filter yang None)
+                    my_final_team = [x for x in st.session_state.blue_picks if x]
+                    
+                    if my_final_team:
+                        user_hero = st.selectbox("Pilih Hero Anda:", my_final_team)
+                    else:
+                        st.warning("Draft belum lengkap.")
+                        user_hero = None
+
+                st.markdown("---")
+                
+                if st.form_submit_button("CONFIRM & SAVE DATA", type="primary", use_container_width=True):
+                    if user_hero and my_final_team and en_team:
+                        # Siapkan data untuk dikirim
+                        status_str = "Win" if "Victory" in res else "Loss"
+                        
+                        # Panggil fungsi save (akan kita update di backend setelah ini)
+                        # Kita kirim 'user_hero' secara spesifik
+                        success = recommender.save_match_result(
+                            my_team=my_final_team, 
+                            enemy_team=en_team, 
+                            result_status=status_str,
+                            user_hero_played=user_hero # <--- INI KUNCINYA
+                        )
+                        
+                        if success:
+                            st.success("✅ Match Saved! AI Learning in progress...")
+                            # Trigger ETL Otomatis (biarkan seperti ini)
+                            subprocess.Popen(["python", "-m", "source.transform.process_user_data"])
+                            time.sleep(2)
+                            reset_draft()
+                        else:
+                            st.error("Gagal menyimpan data.")
+                    else:
+                        st.error("Lengkapi Draft Pick terlebih dahulu!")
+            
             st.markdown('</div>', unsafe_allow_html=True)
 
 
     # --- RIGHT: RED TEAM ---
     with col_r:
         st.markdown('<div class="glass-card team-red">', unsafe_allow_html=True)
-        st.markdown('<h3 class="glow-text-red" style="text-align:center;">HOSTILES</h3>', unsafe_allow_html=True)
+        st.markdown('<h3 class="glow-text-red" style="text-align:center;">ENEMIES</h3>', unsafe_allow_html=True)
         
         for i in range(5):
             is_active = (curr_team == 'Red' and curr_idx == i)

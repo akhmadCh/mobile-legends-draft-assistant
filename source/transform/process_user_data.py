@@ -9,71 +9,90 @@ from source.utils.helper_bronze import normalize_hero_name
 
 BUCKET_NAME = "mlbb-lake"
 
+# --- 1. BRONZE LAYER: Raw Ingestion ---
 def process_user_bronze():
     print("[User Pipeline] Processing Bronze...")
-    # Baca RAW CSV
+    
     df = read_df_from_minio(BUCKET_NAME, "raw/user_history/match_history_user.csv", file_format='csv')
     if df is None or df.empty:
-        print("No raw user data found.")
+        print("No raw data found.")
         return None
 
-    # Cleaning dasar
+    # metadata manual
     df['ingested_at'] = get_timestamp()
-    
-    # Simpan sebagai Parquet (Bronze)
+
     upload_df_to_minio(df, BUCKET_NAME, "bronze/user_history/user_match_history.parquet", file_format='parquet')
+    print("[User Pipeline] Bronze Saved.")
     return df
 
+# --- 2. SILVER LAYER: Cleaning & Formatting ---
 def process_user_silver():
     print("[User Pipeline] Processing Silver...")
-    # Baca Bronze
+    
     df = read_df_from_minio(BUCKET_NAME, "bronze/user_history/user_match_history.parquet", file_format='parquet')
-    if df is None: return None
+    if df is None or df.empty: return None
 
-    # Logic: Explode My Team untuk analisa per Hero
-    # Format Raw "HeroA,HeroB" -> List -> Rows
-    expanded_rows = []
+    # cleaning, jadi nilai 1/0
+    df['is_win'] = df['result'].apply(lambda x: 1 if str(x).strip().lower() in ['win', 'victory'] else 0)
+
+    # normalisasi nama hero
+    df['user_hero_id'] = df['user_hero'].apply(lambda x: normalize_hero_name(str(x)))
+
+    # parsing tim (String -> List) "Layla, Tigreal" -> ['layla', 'tigreal']
+    def parse_team_list(team_str):
+        if pd.isna(team_str): return []
+        # split koma, strip spasi, lalu normalize
+        return [normalize_hero_name(h.strip()) for h in str(team_str).split(',') if h.strip()]
+
+    df['my_team_list'] = df['my_team'].apply(parse_team_list)
+
+    df_silver = df[['timestamp', 'user_hero_id', 'my_team_list', 'is_win', 'ingested_at']]
     
-    for _, row in df.iterrows():
-        # Parsing string CSV manual atau pakai split
-        my_heroes = str(row['my_team']).split(',')
-        is_win = 1 if str(row['result']).strip().lower() == 'win' else 0
-        
-        for hero in my_heroes:
-            hero_clean = hero.strip()
-            if hero_clean:
-                expanded_rows.append({
-                    'timestamp': row['timestamp'],
-                    'hero_name_raw': hero_clean,
-                    'hero_id': normalize_hero_name(hero_clean), # Normalisasi penting!
-                    'is_win': is_win
-                })
-    
-    df_silver = pd.DataFrame(expanded_rows)
-    
-    # Simpan Silver (Data detail per hero per match)
-    upload_df_to_minio(df_silver, BUCKET_NAME, "silver/user_history/user_hero_history.parquet", file_format='parquet')
+    upload_df_to_minio(df_silver, BUCKET_NAME, "silver/user_history/user_match_enriched.parquet", file_format='parquet')
+    print("[User Pipeline] Silver Saved.")
     return df_silver
 
+# --- 3. GOLD LAYER: Aggregation ---
 def process_user_gold():
     print("[User Pipeline] Processing Gold...")
-    # Baca Silver
-    df = read_df_from_minio(BUCKET_NAME, "silver/user_history/user_hero_history.parquet", file_format='parquet')
-    if df is None: return
+    
+    df = read_df_from_minio(BUCKET_NAME, "silver/user_history/user_match_enriched.parquet", file_format='parquet')
+    if df is None or df.empty: return
 
-    # AGREGASI: Group by Hero untuk dapat statistik User
-    # Inilah yang akan dibaca recommender.py
-    df_agg = df.groupby('hero_id').agg(
+    # PERSONAL STATS
+    # hitung performa User Hero
+    # group by id 'user_hero_id'
+    df_personal = df.groupby('user_hero_id').agg(
         total_picks=('is_win', 'count'),
         total_wins=('is_win', 'sum')
     ).reset_index()
     
-    df_agg['win_rate'] = df_agg['total_wins'] / df_agg['total_picks']
-    df_agg['last_updated'] = get_timestamp()
+    df_personal['win_rate'] = df_personal['total_wins'] / df_personal['total_picks']
+    df_personal['hero_id'] = df_personal['user_hero_id'] # rename nama hero agar konsisten
     
-    # Simpan Gold
-    upload_df_to_minio(df_agg, BUCKET_NAME, "gold/user_history/user_hero_performance.parquet", file_format='parquet')
-    print(f"[User Pipeline] DONE. Aggregated stats for {len(df_agg)} heroes.")
+    upload_df_to_minio(df_personal, BUCKET_NAME, "gold/user_history/user_hero_performance.parquet", file_format='parquet')
+    print(f"Saved Personal Stats: {len(df_personal)} heroes")
+
+    # SYNERGY STATS
+    # (explode) list tim menjadi baris agar bisa grouping
+    # 2. [User: Layla, Teammate: Tigreal, Win: 1] -> data sinergi
+
+    df_exploded = df.explode('my_team_list').rename(columns={'my_team_list': 'teammate_id'})
+    
+    # filter, hapus jika teammate == user_hero (tidak menghitung sinergi hero sendiri)
+    df_synergy_clean = df_exploded[df_exploded['teammate_id'] != df_exploded['user_hero_id']]
+
+    # agregasi data sinergi
+    df_synergy_agg = df_synergy_clean.groupby('teammate_id').agg(
+        matches_together=('is_win', 'count'),
+        wins_together=('is_win', 'sum')
+    ).reset_index()
+
+    df_synergy_agg['synergy_wr'] = df_synergy_agg['wins_together'] / df_synergy_agg['matches_together']
+    df_synergy_agg['hero_id'] = df_synergy_agg['teammate_id'] # Rename untuk konsistensi
+
+    upload_df_to_minio(df_synergy_agg, BUCKET_NAME, "gold/user_history/user_team_synergy.parquet", file_format='parquet')
+    print(f"Saved Synergy Stats: {len(df_synergy_agg)} teammates")
 
 if __name__ == "__main__":
     process_user_bronze()
