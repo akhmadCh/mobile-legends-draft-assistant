@@ -398,3 +398,151 @@ class DraftRecommender:
             results.append({'hero': row['hero_name'], 'reason': final_reason})
             
         return results
+    
+    def recommend_personalized(self, my_team, enemy_team, banned_heroes, user_profile):
+        """
+        Menghasilkan rekomendasi Terpisah:
+        1. User Recs (Top 5) -> Fokus ke Mastery & Comfort (Alasan Personal)
+        2. Team Recs (Top 25) -> Fokus ke Meta, Counter & Synergy (Alasan Strategis)
+        """
+        # Filter hero tersedia
+        all_unavailable = (my_team or []) + (enemy_team or []) + (banned_heroes or [])
+        unavailable_keys = set([self._normalize_name(h) for h in all_unavailable if h])
+        candidates = self.df_stats[~self.df_stats['join_key'].isin(unavailable_keys)].copy()
+        
+        if candidates.empty: return [], []
+
+        # Ambil profil user
+        preferred_roles = user_profile.get('main_roles', [])
+        comfort_heroes = user_profile.get('comfort_heroes', [])
+        avoid_roles = user_profile.get('avoid_roles', [])
+
+        user_recs = []
+        team_recs = []
+
+        for idx, row in candidates.iterrows():
+            hero_name = row['hero_name']
+            role = str(row['role'])
+            
+            # --- 1. HITUNG SKOR DASAR (META) ---
+            # Base score dari Win Rate Global (0-100)
+            meta_score = row['win_rate'] * 100 
+            
+            # --- 2. HITUNG SKOR & ALASAN STRATEGIS (TIM) ---
+            strat_score = meta_score
+            strat_reasons = []
+
+            # A. Cek Meta/Tier
+            if row['win_rate'] > 0.54:
+                strat_reasons.append(f"🔥 Meta (WR Global {row['win_rate']:.1f}%)")
+            elif row['win_rate'] > 0.51:
+                strat_reasons.append(f"📈 Good Stats (WR {row['win_rate']:.1f}%)")
+
+            # B. Cek Kebutuhan Tim (Role Filling)
+            missing_roles = self.get_team_missing_roles(my_team)
+            hero_lane = str(row['lane']).lower()
+            is_needed = False
+            for needed in missing_roles:
+                if needed.split()[0].lower() in hero_lane: 
+                    strat_score += 40 # Boost besar jika dibutuhkan tim
+                    strat_reasons.insert(0, f"✅ Isi {needed}") # Taruh paling depan
+                    is_needed = True
+                    break
+            
+            # C. Cek Counter Musuh (Hard/Soft Counter)
+            if enemy_team and not self.df_counters.empty:
+                for enemy in enemy_team:
+                    if not enemy: continue
+                    enemy_key = self._normalize_name(enemy)
+                    # Cek di tabel counter
+                    c_row = self.df_counters[
+                        (self.df_counters['target_key'] == enemy_key) & 
+                        (self.df_counters['counter_key'] == row['join_key'])
+                    ]
+                    if not c_row.empty:
+                        score_val = float(c_row.iloc[0]['score'])
+                        if score_val >= 2.0:
+                            strat_score += 25
+                            strat_reasons.append(f"⚔️ Hard Counter {enemy}")
+                        elif score_val >= 1.0:
+                            strat_score += 15
+                            strat_reasons.append(f"🛡️ Counter {enemy}")
+
+            # --- 3. HITUNG SKOR & ALASAN PERSONAL (USER) ---
+            # Ambil statistik user dari Gold Layer
+            u_pick, u_wr = self.get_user_hero_stats(hero_name)
+            
+            user_score = strat_score # Start from strategic score
+            user_reasons = []
+
+            # Logika Alasan User (Sesuai Request)
+            if u_pick > 0:
+                if u_wr > 0.6: # Jago (>60% WR)
+                    user_score += 50
+                    user_reasons.insert(0, f"🌟 Hero Andalan (WR {u_wr:.0%})")
+                elif u_pick >= 3: # Comfort Pick (Sering main)
+                    user_score += 30
+                    user_reasons.append(f"👤 Sering dipakai ({u_pick}x) (WR {u_wr:.0%})")
+                elif u_wr < 0.4 and u_pick >= 2: # Kurang bisa
+                    user_score -= 20
+                    user_reasons.append(f"📉 Riwayat buruk (WR {u_wr:.0%})")
+                else: 
+                    user_reasons.append(f"📝 History: {u_pick} match")
+            
+            # Cek Manual Input (Comfort Heroes)
+            if hero_name in comfort_heroes:
+                user_score += 40
+                user_reasons.insert(0, "❤️ Comfort Pick (Manual)")
+            
+            # Cek Role Utama
+            is_user_role = any(r in role for r in preferred_roles)
+            if is_user_role:
+                user_score += 15
+                # Opsional: tidak perlu dimunculkan di teks agar tidak penuh, 
+                # atau dimunculkan jika belum ada alasan lain.
+                if not user_reasons: user_reasons.append("🎯 Role Utama")
+
+            # --- 4. PEMISAHAN & FINALISASI ---
+            
+            # Gabungkan alasan strategis ke user reason juga (karena user butuh tau kenapa hero ini bagus)
+            # Tapi batasi agar tidak kepanjangan
+            combined_user_reasons = user_reasons + strat_reasons[:2]
+            
+            # KATEGORI A: REKOMENDASI USER
+            # Syarat: Role cocok ATAU Comfort ATAU History Bagus (WR > 50%)
+            # Dan BUKAN Role Anti (kecuali comfort hero)
+            is_avoid = any(r in role for r in avoid_roles)
+            
+            valid_for_user = (is_user_role or (hero_name in comfort_heroes) or (u_wr > 0.5 and u_pick > 2))
+            
+            if valid_for_user and not (is_avoid and hero_name not in comfort_heroes):
+                user_recs.append({
+                    'hero': hero_name,
+                    'score': user_score,
+                    'reason': " • ".join(combined_user_reasons[:3]) # Ambil 3 alasan teratas
+                })
+            
+            # KATEGORI B: REKOMENDASI TIM
+            # Syarat: Skor Strategis Tinggi (Meta/Counter/Needed)
+            # Masukkan SEMUA yang bagus secara strategi, nanti di-sort
+            if strat_score > 60 or is_needed:
+                # Tambahkan label jika ini bukan role user
+                final_strat_reasons = strat_reasons
+                if is_avoid:
+                    final_strat_reasons.append("⚠️ (Bukan Role Anda)")
+                
+                team_recs.append({
+                    'hero': hero_name,
+                    'score': strat_score,
+                    'reason': " • ".join(final_strat_reasons[:3])
+                })
+
+        # --- 5. SORTING & SLICING (Sesuai Request) ---
+        
+        # User: Top 10
+        user_recs = sorted(user_recs, key=lambda x: x['hero'] in comfort_heroes, reverse=True)[:10]
+        
+        # Team: Top 25 (Agar user bisa scroll banyak opsi)
+        team_recs = sorted(team_recs, key=lambda x: x['score'], reverse=True)[:25]
+        
+        return user_recs, team_recs
