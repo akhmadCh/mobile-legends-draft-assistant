@@ -473,7 +473,7 @@ class DraftRecommender:
             if u_pick > 0:
                 if u_wr > 0.6: # Jago
                     user_score += 50
-                    user_reasons.insert(0, f"🌟 Hero Andalan Kamu! (WR {u_wr:.0%})")
+                    user_reasons.insert(0, f"🌟 Hero Andalan (WR {u_wr:.0%})")
                 elif u_pick >= 3: # Sering Pakai
                     user_score += 30
                     user_reasons.append(f"👤 Sering dipakai ({u_pick}x) (WR {u_wr:.0%})")
@@ -481,7 +481,7 @@ class DraftRecommender:
                     user_score -= 20
                     user_reasons.append(f"📉 Skill issue kalau pakai ({u_pick}x) (WR {u_wr:.0%})")
                 else: 
-                    user_reasons.append(f"📝 Hanya dipakai {u_pick} match, WR kamu {u_wr:.0%}...")
+                    user_reasons.append(f"📝 Hanya dipakai {u_pick} match, WR {u_wr:.0%}...")
             
             # 2. Logika Comfort Pick (Manual Input)
             if hero_name in comfort_heroes:
