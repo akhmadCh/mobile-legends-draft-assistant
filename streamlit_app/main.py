@@ -224,7 +224,19 @@ st.markdown("""
 # --- 7. SIDEBAR (SETTINGS) ---
 with st.sidebar:
     st.markdown("### 🛠️ CONFIGURATION")
-    with st.expander("👤 User Profile", expanded=True):
+    
+    st.markdown("### 🔐 USER ACCESS")
+    
+    # 1. INPUT USERNAME (Identitas)
+    # Ini kunci utamanya. Data akan difilter berdasarkan nama ini.
+    active_user = st.text_input("Username / Agent Name:", value="", help="Masukkan nama unik untuk membedakan data history Anda.")
+    
+    # Simpan di session state biar bisa diakses di mana-mana
+    st.session_state['active_user'] = active_user.strip().lower() # Normalisasi jadi huruf kecil
+    
+    st.divider()
+    
+    with st.expander(f"👤 User Profile ({active_user})", expanded=True):
       # 1. Role Utama (Apa yang kamu jago?)
       # User bisa pilih lebih dari satu, misal: Mage dan Marksman
       preferred_roles = st.multiselect(
@@ -318,7 +330,7 @@ with st.sidebar:
             # Tampilkan Data Frame (Bukan cuma angka)
             with st.expander("Lihat Riwayat Detail", expanded=False):
                 # Tampilkan kolom penting saja
-                cols_show = ['timestamp', 'result', 'my_team']
+                cols_show = ['timestamp', 'username', 'my_team', 'result']
                 st.dataframe(
                     df_hist_display[cols_show].sort_values('timestamp', ascending=False),
                     use_container_width=True,
@@ -483,7 +495,7 @@ else:
 
         # 2. RECOMMENDATION ENGINE
         if curr_team == 'Blue':
-            recs_user, recs_team = recommender.recommend_personalized(my_team, en_team, banned, st.session_state['user_profile'])
+            recs_user, recs_team = recommender.recommend_personalized(my_team, en_team, banned, st.session_state['user_profile'], st.session_state['active_user'])
             
             st.markdown('<div class="glass-card">', unsafe_allow_html=True)
             
@@ -501,8 +513,19 @@ else:
                               <div class="hero-desc">{r['reason']}</div>
                            </div>
                            
-                           <div class="hero-score" style="color:{'red' if r['wr'] < 0.4 else '#22c55e'};">
-                              {"NOT RECOMMEND!" if r['wr'] < 0.4 else 'BEST PICK'}
+                           <div class="hero-score"
+                              style="color:{
+                                    'red' if (r['has_history'] and r['wr'] < 0.4)
+                                    else '#22c55e' if r['has_history']
+                                    else 'transparent'
+                              };">
+
+                              {
+                                 'NOT RECOMMEND!' if (r['has_history'] and r['wr'] < 0.4)
+                                 else 'BEST PICK' if r['has_history']
+                                 else ''
+                              }
+
                            </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -565,13 +588,13 @@ else:
                         # Siapkan data untuk dikirim
                         status_str = "Win" if "Victory" in res else "Loss"
                         
-                        # Panggil fungsi save (akan kita update di backend setelah ini)
-                        # Kita kirim 'user_hero' secara spesifik
+                        # Panggil fungsi save (UPDATE DISINI)
                         success = recommender.save_match_result(
                             my_team=my_final_team, 
                             enemy_team=en_team, 
                             result_status=status_str,
-                            user_hero_played=user_hero # <--- INI KUNCINYA
+                            user_hero_played=user_hero,
+                            username=st.session_state['active_user']
                         )
                         
                         if success:

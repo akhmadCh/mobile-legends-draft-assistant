@@ -32,21 +32,29 @@ def process_user_silver():
     df = read_df_from_minio(BUCKET_NAME, "bronze/user_history/user_match_history.parquet", file_format='parquet')
     if df is None or df.empty: return None
 
-    # cleaning, jadi nilai 1/0
+    # multi user
+    # apakah kolom 'username' ada, jika data lama belum ada, isi default 'user'
+    if 'username' not in df.columns:
+        df['username'] = 'user'
+    
+    # Bersihkan username (lowercase & strip spasi) agar konsisten
+    df['username'] = df['username'].astype(str).str.lower().str.strip()
+
+    # Cleaning Win/Loss
     df['is_win'] = df['result'].apply(lambda x: 1 if str(x).strip().lower() in ['win', 'victory'] else 0)
 
-    # normalisasi nama hero
+    # Normalisasi nama hero user
     df['user_hero_id'] = df['user_hero'].apply(lambda x: normalize_hero_name(str(x)))
 
-    # parsing tim (String -> List) "Layla, Tigreal" -> ['layla', 'tigreal']
+    # Parsing tim (String -> List)
     def parse_team_list(team_str):
         if pd.isna(team_str): return []
-        # split koma, strip spasi, lalu normalize
         return [normalize_hero_name(h.strip()) for h in str(team_str).split(',') if h.strip()]
 
     df['my_team_list'] = df['my_team'].apply(parse_team_list)
 
-    df_silver = df[['timestamp', 'user_hero_id', 'my_team_list', 'is_win', 'ingested_at']]
+    # Simpan kolom penting termasuk 'username'
+    df_silver = df[['timestamp', 'username', 'user_hero_id', 'my_team_list', 'is_win', 'ingested_at']]
     
     upload_df_to_minio(df_silver, BUCKET_NAME, "silver/user_history/user_match_enriched.parquet", file_format='parquet')
     print("[User Pipeline] Silver Saved.")
@@ -59,40 +67,39 @@ def process_user_gold():
     df = read_df_from_minio(BUCKET_NAME, "silver/user_history/user_match_enriched.parquet", file_format='parquet')
     if df is None or df.empty: return
 
-    # PERSONAL STATS
-    # hitung performa User Hero
-    # group by id 'user_hero_id'
-    df_personal = df.groupby('user_hero_id').agg(
+    # personal stats user
+    # group by 'username' DAN 'user_hero_id'
+    # Agar statistik tiap user tidak tercampur dengan user lain
+    df_personal = df.groupby(['username', 'user_hero_id']).agg(
         total_picks=('is_win', 'count'),
         total_wins=('is_win', 'sum')
     ).reset_index()
     
     df_personal['win_rate'] = df_personal['total_wins'] / df_personal['total_picks']
-    df_personal['hero_id'] = df_personal['user_hero_id'] # rename nama hero agar konsisten
+    df_personal['hero_id'] = df_personal['user_hero_id'] 
     
     upload_df_to_minio(df_personal, BUCKET_NAME, "gold/user_history/user_hero_performance.parquet", file_format='parquet')
-    print(f"Saved Personal Stats: {len(df_personal)} heroes")
+    print(f"Saved Personal Stats: {len(df_personal)} rows (User x Hero)")
 
-    # SYNERGY STATS
-    # (explode) list tim menjadi baris agar bisa grouping
-    # 2. [User: Layla, Teammate: Tigreal, Win: 1] -> data sinergi
-
+    # SYNERGY STATS (Multi-User)
+    # explode list tim menjadi baris
     df_exploded = df.explode('my_team_list').rename(columns={'my_team_list': 'teammate_id'})
     
-    # filter, hapus jika teammate == user_hero (tidak menghitung sinergi hero sendiri)
+    # hapus jika teammate == user_hero (diri sendiri)
     df_synergy_clean = df_exploded[df_exploded['teammate_id'] != df_exploded['user_hero_id']]
 
-    # agregasi data sinergi
-    df_synergy_agg = df_synergy_clean.groupby('teammate_id').agg(
+    # agregasi data sinergi per User
+    # group by 'username' DAN 'teammate_id'
+    df_synergy_agg = df_synergy_clean.groupby(['username', 'teammate_id']).agg(
         matches_together=('is_win', 'count'),
         wins_together=('is_win', 'sum')
     ).reset_index()
 
     df_synergy_agg['synergy_wr'] = df_synergy_agg['wins_together'] / df_synergy_agg['matches_together']
-    df_synergy_agg['hero_id'] = df_synergy_agg['teammate_id'] # Rename untuk konsistensi
+    df_synergy_agg['hero_id'] = df_synergy_agg['teammate_id']
 
     upload_df_to_minio(df_synergy_agg, BUCKET_NAME, "gold/user_history/user_team_synergy.parquet", file_format='parquet')
-    print(f"Saved Synergy Stats: {len(df_synergy_agg)} teammates")
+    print(f"Saved Synergy Stats: {len(df_synergy_agg)} rows (User x Teammate)")
 
 if __name__ == "__main__":
     process_user_bronze()

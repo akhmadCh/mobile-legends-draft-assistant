@@ -29,6 +29,7 @@ COUNTER_DATA_PATH = "gold/hero_counter_lookup.parquet"
 RAW_HISTORY_PATH = "raw/user_history/match_history_user.csv" 
 # 2. Read: Baca statistik user yang sudah matang dari GOLD (Parquet)
 GOLD_USER_STATS_PATH = "gold/user_history/user_hero_performance.parquet"
+GOLD_USER_SYNERGY_PATH = "gold/user_history/user_team_synergy.parquet"
 
 class DraftRecommender:
     def __init__(self):
@@ -43,7 +44,7 @@ class DraftRecommender:
             self.df_user_perf = read_df_from_minio(BUCKET_NAME, GOLD_USER_STATS_PATH, file_format='parquet')
             
             # data sinergi
-            self.df_synergy = read_df_from_minio(BUCKET_NAME, "gold/user_history/user_team_synergy.parquet", file_format='parquet')
+            self.df_synergy = read_df_from_minio(BUCKET_NAME, GOLD_USER_SYNERGY_PATH, file_format='parquet')
             
             if self.df_user_perf is None or self.df_user_perf.empty:
                 print("[INFO] User Gold data not found. New user or pipeline hasn't run.")
@@ -68,7 +69,7 @@ class DraftRecommender:
         return re.sub(r'[^a-zA-Z0-9]', '', str(name)).lower()
 
     # MANAJEMEN DATA USER (WRITE RAW -> READ GOLD)
-    def save_match_result(self, my_team, enemy_team, result_status, user_hero_played):
+    def save_match_result(self, my_team, enemy_team, result_status, user_hero_played, username):
         """
         Menyimpan hasil match dengan format baru:
         Menambahkan kolom 'user_hero' agar sistem tahu mana yang dimainkan user.
@@ -84,10 +85,11 @@ class DraftRecommender:
             
             new_data = {
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'username': str(username).strip().lower(), # <--- KOLOM BARU
                 'my_team': my_team_str,
                 'enemy_team': enemy_team_str,
                 'result': result_status,
-                'user_hero': str(user_hero_played) # <--- TAMBAHAN PENTING
+                'user_hero': str(user_hero_played)
             }
             
             new_row = pd.DataFrame([new_data])
@@ -107,28 +109,36 @@ class DraftRecommender:
             print(f"[ERROR] Save failed: {e}")
             return False
 
-    def get_user_hero_stats(self, hero_name):
+    def get_user_hero_stats(self, hero_name, username):
         """
-        Mendapatkan statistik user untuk hero tertentu.
-        Sekarang membaca langsung dari GOLD DataFrame (self.df_user_perf).
+        Mengambil statistik hero KHUSUS untuk username tertentu.
         """
         if self.df_user_perf.empty:
             return 0, 0.0
         
         hero_clean = self._normalize_name(hero_name)
-        if not hero_clean: return 0, 0.0
+        user_clean = str(username).strip().lower()
         
-        # Cari di dataframe user performance
-        # Kita asumsikan kolom di Gold adalah 'hero_id' (nama normal)
-        row = self.df_user_perf[self.df_user_perf['hero_id'] == hero_clean]
+        # --- PERBAIKAN: Cek apakah kolom 'username' ada ---
+        if 'username' in self.df_user_perf.columns:
+            # Jika kolom ada, filter berdasarkan User DAN Hero
+            row = self.df_user_perf[
+                (self.df_user_perf['hero_id'] == hero_clean) & 
+                (self.df_user_perf['username'] == user_clean)
+            ]
+        else:
+            # Jika kolom BELUM ada (Data Lama), anggap ini data milik 'adri' (default)
+            # Jadi kalau login sebagai 'adri', dia baca data lama. Kalau user lain, 0.
+            if user_clean == 'adri': 
+                row = self.df_user_perf[self.df_user_perf['hero_id'] == hero_clean]
+            else:
+                return 0, 0.0
         
         if not row.empty:
-            # Ambil nilai dari baris pertama yang ketemu
             picks = int(row.iloc[0]['total_picks'])
             wr = float(row.iloc[0]['win_rate'])
             return picks, wr
             
-        # Jika hero tidak ditemukan di stats user
         return 0, 0.0
 
     # DATA (GLOBAL & COUNTER)
@@ -325,7 +335,7 @@ class DraftRecommender:
             hero_name = row['hero_name']
             
             # Panggil fungsi yang sekarang membaca dari Gold Parquet
-            u_pick, u_wr = self.get_user_hero_stats(hero_name)
+            u_pick, u_wr = self.get_user_hero_stats(hero_name, username)
             
             user_score = 50.0 # Default netral
             
@@ -380,7 +390,7 @@ class DraftRecommender:
             
         return results
     
-    def recommend_personalized(self, my_team, enemy_team, banned_heroes, user_profile):
+    def recommend_personalized(self, my_team, enemy_team, banned_heroes, user_profile, username):
         """
         Menghasilkan rekomendasi Terpisah:
         1. User Recs (Top 10) -> Prioritas Comfort Hero & Mastery (Personal)
@@ -393,18 +403,27 @@ class DraftRecommender:
         
         if candidates.empty: return [], []
 
-        # 2. Ambil data profil user
-        preferred_roles = user_profile.get('main_roles', [])
+        # 2. Ambil data profil user & NORMALISASI ke lowercase
+        raw_preferred = user_profile.get('main_roles', [])
+        preferred_roles = [r.lower() for r in raw_preferred] # jadi ['mage', 'marksman']
+        
         comfort_heroes = user_profile.get('comfort_heroes', [])
-        avoid_roles = user_profile.get('avoid_roles', [])
+        
+        raw_avoid = user_profile.get('avoid_roles', [])
+        avoid_roles = [r.lower() for r in raw_avoid] # jadi ['tank']
 
         user_recs = []
         team_recs = []
 
         for idx, row in candidates.iterrows():
             hero_name = row['hero_name']
-            role = str(row['role'])
+            role = str(row['role']).lower()
             hero_key = row['join_key'] # Key untuk lookup sinergi/counter
+            
+            is_high_synergy = False
+            
+            # panggil fungsi stats dengan username
+            u_pick, u_wr = self.get_user_hero_stats(hero_name, username)
             
             # --- PHASE A: HITUNG SKOR STRATEGIS (BASE) ---
             # Skor ini murni objektif: Meta + Kebutuhan Tim + Counter
@@ -455,7 +474,7 @@ class DraftRecommender:
             # Skor ini subjektif: Skill User + Comfort
             
             # Ambil history user
-            u_pick, u_wr = self.get_user_hero_stats(hero_name)
+            u_pick, u_wr = self.get_user_hero_stats(hero_name, username)
             
             # Inisialisasi skor user dari skor strategis (biar tetap objektif)
             user_score = strat_score 
