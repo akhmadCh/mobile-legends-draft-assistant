@@ -520,9 +520,9 @@ else:
                               };">
 
                               {
-                                 'NOT RECOMMEND!' if (r['has_history'] and r['wr'] < 0.4)
-                                 else 'BEST PICK' if r['has_history']
-                                 else ''
+                                 'NOT RECOMMEND!' if (r['pick_count'] > 5 and r['wr'] < 0.4)
+                                 else 'BEST PICK' if r['has_history'] and r['wr'] > 0.4
+                                 else 'RECOMMEND TO TRY'
                               }
 
                            </div>
