@@ -259,7 +259,7 @@ class DraftRecommender:
             
         return results
 
-    def recommend_dynamic_pick(self, my_team, enemy_team, banned_heroes):
+    def recommend_dynamic_pick(self, my_team, enemy_team, banned_heroes, username):
         """
         Rekomendasi Pick dengan Rumus:
         Skor = (Data Eksternal * 40%) + (Kebutuhan Tim * 30%) + (User Performance * 30%)
@@ -413,15 +413,32 @@ class DraftRecommender:
         avoid_roles = [r.lower() for r in raw_avoid]
 
         current_user = str(username).strip().lower()
+        
+        # 3. EKSTRAKSI ROLE DARI COMFORT HEROES
+        # cari tahu user suka main role spesifik apa dari comfort pick-nya?"
+        # misal: comfort hero adalah Ruby (Fighter/Tank). maka user suka fighter dan tank
+        comfort_specific_roles = set()
+        if comfort_heroes:
+            # Ambil data role dari dataframe stats berdasarkan nama hero comfort
+            comfort_rows = self.df_stats[self.df_stats['hero_name'].isin(comfort_heroes)]
+            for _, c_row in comfort_rows.iterrows():
+                # Split role "Fighter/Tank" jadi ["fighter", "tank"]
+                # Biar sistem tau user suka main hero tipe apa secara spesifik
+                c_roles = str(c_row['role']).lower().replace('/', ',').split(',')
+                for r in c_roles:
+                    comfort_specific_roles.add(r.strip())
 
         user_recs = []
         team_recs = []
 
         for idx, row in candidates.iterrows():
             hero_name = row['hero_name']
-            role = str(row['role']).lower()
-            hero_key = row['join_key']
             
+            # normalisasi nama hero
+            role = str(row['role']).lower()
+            current_hero_roles = [x.strip() for x in role.replace('/', ',').split(',')]
+            
+            hero_key = row['join_key']
             is_high_synergy = False
             
             # Stats user
@@ -471,35 +488,57 @@ class DraftRecommender:
             # Jika hero ini sesuai role user TAPI user jarang/belum pernah pakai (u_pick < 5),
             # Berikan boost agar masuk rekomendasi Tim sebagai "Saran Eksplorasi".
             
+            # apakah sesuai dengan role utama? (Assassin/Fighter)
             is_user_role = any(r in role for r in preferred_roles)
             
-            if is_user_role and u_pick < 5:
-                # Boost hanya jika statistiknya tidak jelek (WR Global > 48%)
-                if row['win_rate'] > 0.48:
-                    strat_score += 20 # Boost moderat (di bawah boost Sinergi)
-                    # Tambahkan alasan yang menarik
-                    strat_reasons.append("Role Kamu! (Coba Heronya!)")
+            # apakah mirip dengan comfort pick? (Martis/Arlott)
+            is_similar_style = any(r in comfort_specific_roles for r in current_hero_roles)
+            
+            # apakah user jarang pakai? agar menjadi eksplorasi atau saran
+            is_new_experience = (u_pick < 5)
+            
+            if is_new_experience:
+                exploration_boost = 0
+                
+                # Syarat: Stats Global tidak hancur (>47%)
+                if row['win_rate'] > 0.47:
+                    
+                    # Boost A: Sesuai Main Role (Kita naikkan jadi 25 poin)
+                    # Ini biar Assassin/Fighter naik ke atas mengalahkan Tank Meta
+                    if is_user_role:
+                        exploration_boost += 25
+                        strat_reasons.append("✨ Sesuai Role")
+                    
+                    # Boost B: Mirip Comfort Pick (Kita tambah 15 poin lagi)
+                    # Ini biar Paquito/Lancelot makin kuat skornya
+                    if is_similar_style:
+                        exploration_boost += 15
+                        # Cuma tambah teks jika belum ada teks "Sesuai Role" biar ga penuh
+                        if not is_user_role: 
+                            strat_reasons.append("🎭 Mirip Hero Favorit")
+                
+                # Masukkan boost ke skor strategis (untuk Tab Kanan)
+                strat_score += exploration_boost
 
-            # --- PHASE B: HITUNG SKOR PERSONAL (USER) ---
+            # --- PHASE B: SKOR PERSONAL ---
             user_score = strat_score 
             user_reasons = []
 
             is_comfort = hero_name in comfort_heroes
             has_history = (u_pick > 0) 
             
-            # Scoring Personal
             if u_pick > 0:
                 if u_wr > 0.6: 
                     user_score += 50
-                    user_reasons.insert(0, f"🌟 Hero Andalan (WR {u_wr:.0%})")
+                    user_reasons.insert(0, f"🌟 Hero Andalan")
                 elif u_pick >= 3: 
                     user_score += 30
-                    user_reasons.append(f"👤 Sering dipakai ({u_pick}x) (WR {u_wr:.0%})")
+                    user_reasons.append(f"👤 Sering dipakai")
                 elif u_wr < 0.4 and u_pick >= 2: 
                     user_score -= 20
-                    user_reasons.append(f"📉 Skill issue ({u_pick}x)")
+                    user_reasons.append(f"📉 Skill issue")
                 else: 
-                    user_reasons.append(f"📝 History: {u_pick} match (WR {u_wr:.0%})")
+                    user_reasons.append(f"📝 History: {u_pick} match")
             
             if is_comfort:
                 user_score += 40
@@ -514,7 +553,7 @@ class DraftRecommender:
             is_avoid = any(r in role for r in avoid_roles)
             valid_for_user = (is_comfort or has_history or is_user_role)
             
-            # List USER (Kiri) - Tetap fokus history & comfort
+            # List USER
             if valid_for_user:
                 if is_avoid and not (is_comfort or has_history):
                     pass 
@@ -527,13 +566,13 @@ class DraftRecommender:
                         'hero': hero_name,
                         'score': user_score,
                         'wr': u_wr,
-                        'is_comfort': is_comfort,
                         'pick_count': u_pick,
+                        'is_comfort': is_comfort,
                         'has_history': has_history,
                         'reason': display_reason
                     })
             
-            # List TEAM (Kanan) - Gabungan Sinergi, Meta, DAN Explorasi
+            # List TEAM (Sinergi Check)
             if not self.df_synergy.empty:
                 if 'username' in self.df_synergy.columns:
                     syn_row = self.df_synergy[
@@ -550,15 +589,16 @@ class DraftRecommender:
                     if matches >= 2:
                         if syn_wr > 0.6:
                             strat_score += 35 
-                            strat_reasons.insert(0, f"🤝 Sinergi Tinggi (WR {syn_wr:.0%})")
+                            strat_reasons.insert(0, f"🤝 Sinergi Tinggi")
                             is_high_synergy = True
                         elif syn_wr < 0.4:
                             strat_score -= 15
                             strat_reasons.append(f"⚠️ Bad Synergy")
             
-            # Ambang batas masuk rekomendasi tim
             if strat_score > 60 or is_needed:
                 final_strat_reasons = strat_reasons
+                
+                # Logic text avoid (Updated: Prioritaskan Main Role)
                 if is_avoid and not is_user_role:
                     final_strat_reasons.append("⚠️ (Bukan Role Anda)")
                 
@@ -569,18 +609,17 @@ class DraftRecommender:
                     'reason': " • ".join(final_strat_reasons[:3])
                 })
 
-        # --- PHASE D: SORTING FINAL ---
+        # --- PHASE D: SORTING ---
         user_recs = sorted(
             user_recs, 
             key=lambda x: (x['is_comfort'], x['has_history'], x['score']), 
             reverse=True
-        )[:10]
+        )[:15]
         
-        # Sort Team: Sinergi -> Score (yang sudah diboost oleh Role Match)
         team_recs = sorted(
             team_recs, 
             key=lambda x: (x['is_high_synergy'], x['score']), 
             reverse=True
-        )[:25]
+        )[:35]
         
         return user_recs, team_recs
